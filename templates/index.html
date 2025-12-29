@@ -1469,7 +1469,9 @@
                             rack.online++;
                             whMap[whName].onlineMiners++;
                             whMap[whName].totalHashrate += miner.hashrate;
-                            if (miner.temp_chip > 0) rack.tempChip.push(miner.temp_chip);
+                            if (miner.temp_chip !== undefined && miner.temp_chip !== null) {
+                                rack.tempChip.push(miner.temp_chip);
+                            }
                         }
                         if (miner.updated > rack.lastUpdated) rack.lastUpdated = miner.updated;
                         if (miner.updated > whMap[whName].lastUpdated) whMap[whName].lastUpdated = miner.updated;

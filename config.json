@@ -1,11 +1,11 @@
 {
     "concurrency": {
-        "max_racks": 8,
+        "max_racks": 5,
         "max_connections": 800
     },
     "batch_processing": {
-        "batch_size": 60,
-        "delay_ms": 50
+        "batch_size": 30,
+        "delay_ms": 250
     },
     "circuit_breaker": {
         "max_failures": 3,

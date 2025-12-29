@@ -255,7 +255,6 @@ async def fetch_avalon_miner(session: aiohttp.ClientSession, ip: str, wh_name: s
     return result
 
 async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name: str, rack_name: str) -> Dict:
-    """Lee datos de Antminer."""
     if is_circuit_open(ip): return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
     
     start = time.time()
@@ -264,32 +263,37 @@ async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name:
     
     try:
         auth = aiohttp.BasicAuth('root', 'root')
-        async with session.get(f"http://{ip}/cgi-bin/stats.cgi", auth=auth, timeout=2.0) as r:
+        # Aumentamos el timeout a 5s porque los S21+ tardan en responder el JSON grande
+        async with session.get(f"http://{ip}/cgi-bin/stats.cgi", auth=auth, timeout=5.0) as r:
             if r.status == 200:
-                record_success(ip)
-                success = True
-                data = await r.json()
-                stats = data.get('STATS', [{}])[0]
+                text_data = await r.text()
+                data = extract_safe_json(text_data)
                 
-                # Leer temperatura ambiente (ambient_temp)
-                ambient_temp = float(stats.get('ambient_temp', 0))
-                
-                # IMPORTANTE: rate_5s viene en GH/s, convertir a TH/s
-                hashrate_ghs = float(stats.get('rate_5s', 0))
-                hashrate_ths = hashrate_ghs / 1000  # Convertir GH/s a TH/s
-                
-                result.update({
-                    'online': True, 
-                    'hashrate_th': hashrate_ths,  # Ahora en TH/s
-                    'power_w': int(stats.get('watt', 0)), 
-                    'temp_chip': int(ambient_temp),  # Temperatura ambiente
-                    'elapsed': int(stats.get('elapsed', 0)), 
-                    'model': 'Antminer', 
-                    'last_updated': time.time()
-                })
+                if data and 'STATS' in data:
+                    # El S21+ a veces pone los datos en el STATS[0] o STATS[1]
+                    stats = data['STATS'][0] if len(data['STATS']) > 0 else {}
+                    
+                    # FALLBACK DE TEMPERATURA: Intentar varias llaves comunes
+                    temp_raw = stats.get('ambient_temp') or stats.get('temp_pcb') or stats.get('temp2') or 0
+                    
+                    # Limpieza de Hashrate
+                    hashrate_ghs = float(stats.get('rate_5s') or stats.get('rate_avg') or 0)
+                    
+                    record_success(ip)
+                    success = True
+                    result.update({
+                        'online': True, 
+                        'hashrate_th': hashrate_ghs / 1000,
+                        'power_w': int(float(stats.get('watt', 0))), 
+                        'temp_chip': float(temp_raw), 
+                        'model': stats.get('type', 'Antminer'),
+                        'last_updated': time.time()
+                    })
+                else: record_failure(ip)
             else: record_failure(ip)
     except Exception as e:
-        logger.debug(f"Error fetching Antminer {ip}: {e}")
+        # CAMBIO: Usamos repr(e) para que veas el error real en el log (Timeout, ConnectionRefused, etc)
+        logger.error(f"Error en IP {ip}: {repr(e)}")
         record_failure(ip)
     
     update_metrics(time.time() - start, success)
@@ -421,7 +425,7 @@ async def update_warehouses():
                 avg_temp = round(sum(acc["temps"])/len(acc["temps"]), 1) if acc["temps"] else 0
                 cache_data["warehouses"][wh_name].update({
                     "total_miners": acc["miners"], "online_miners": acc["on"],
-                    "total_hashrate_th": round(acc["hash"] / 1000, 2),
+                    "total_hashrate_th": round(acc["hash"], 2),
                     "total_power_w": acc["pwr"], "avg_temp": avg_temp,
                     "online_racks": acc["racks_on"], "last_updated": time.time()
                 })
