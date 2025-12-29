@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Vue.js - Contenedores y Warehouses</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        /* --- ESTILOS ORIGINALES CONSERVADOS AL 100% --- */
+        :root {
+            --bg-body: #0d1117;
+            --bg-card: #161b22;
+            --bg-header: #21262d;
+            --border: #30363d;
+            --text-main: #e6edf3;
+            --text-sub: #848d97;
+            --green-ok: #3fb950;
+            --red-err: #f85149;
+            --blue-info: #58a6ff;
+            --orange-warn: #d29922;
+            --b1-bg: rgba(56, 139, 253, 0.1);
+            --b1-text: #79c0ff;
+            --b1-border: rgba(56, 139, 253, 0.4);
+            --b2-bg: rgba(187, 128, 255, 0.1);
+            --b2-text: #d2a8ff;
+            --b2-border: rgba(187, 128, 255, 0.4);
+
+            /* Colores Warehouse */
+            --ok: #238636;
+            --ok-bright: #3fb950;
+            --err: #da3633;
+            --err-bright: #f85149;
+            --warn: #d29922;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-body);
+            color: var(--text-main);
+            margin: 0;
+            padding: 25px;
+            font-size: 14px;
+        }
+
+        .wrapper {
+            max-width: 1750px;
+            margin: auto;
+        }
+
+        h2 {
+            font-weight: 800;
+            color: white;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* CARDS */
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            flex: 1;
+            min-width: 280px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-card h4 {
+            margin: 0 0 12px 0;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-sub);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .stat-content {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-main);
+        }
+
+        .hl-ok {
+            color: var(--green-ok);
+            font-weight: 700;
+        }
+
+        .hl-err {
+            color: var(--red-err);
+            font-weight: 700;
+        }
+
+        /* TABLA (Reemplazo visual de DataTables) */
+        .table-container {
+            background: var(--bg-card);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            position: relative;
+            z-index: 1;
+            overflow-x: auto;
+        }
+
+        table.custom-table {
+            border-collapse: separate;
+            border-spacing: 0 4px;
+            width: 100%;
+            background: transparent;
+        }
+
+        table.custom-table th {
+            background: var(--bg-header);
+            color: var(--text-sub);
+            border-bottom: 0;
+            text-align: center;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            padding: 15px;
+            cursor: pointer;
+        }
+
+        table.custom-table td {
+            text-align: center;
+            border-bottom: 1px solid #262c36;
+            background: #1c2128;
+            padding: 12px 8px;
+            color: white;
+            font-weight: 500;
+        }
+
+        table.custom-table td:first-child {
+            border-radius: 6px 0 0 6px;
+        }
+
+        table.custom-table td:last-child {
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* SEARCH INPUT */
+        .search-box {
+            margin-bottom: 15px;
+            width: 100%;
+        }
+
+        .search-box input {
+            background: #0d1117;
+            border: 2px solid #58a6ff;
+            color: #ffffff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            outline: none;
+            min-width: 300px;
+            font-family: 'JetBrains Mono', monospace;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .search-box input:focus {
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+        }
+
+        /* ALERTAS Y ESTADOS */
+        .row-alert td:first-child {
+            box-shadow: inset 4px 0 0 var(--red-err) !important;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid transparent;
+            min-width: 100px;
+            white-space: nowrap;
+            margin-bottom: 2px;
+        }
+
+        .sp-ok {
+            color: #7ee787;
+            background: rgba(46, 160, 67, 0.15);
+            border-color: rgba(46, 160, 67, 0.4);
+            box-shadow: 0 0 8px rgba(46, 160, 67, 0.1);
+        }
+
+        .sp-crit {
+            color: #ffffff;
+            background: rgba(218, 54, 51, 0.6);
+            border-color: #f85149;
+            box-shadow: 0 0 10px rgba(248, 81, 73, 0.3);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .sp-warn {
+            color: #ffffff;
+            background: rgba(198, 142, 29, 0.5);
+            border-color: #d29922;
+        }
+
+        .sp-off {
+            color: var(--text-sub);
+            background: rgba(48, 54, 61, 0.4);
+            border: 1px dashed var(--border);
+        }
+
+        /* B1/B2 badges */
+        .pwr-box {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .pwr-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+        }
+
+        .pb-1 {
+            background: var(--b1-bg);
+            color: var(--b1-text);
+            border-color: var(--b1-border);
+        }
+
+        .pb-2 {
+            background: var(--b2-bg);
+            color: var(--b2-text);
+            border-color: var(--b2-border);
+        }
+
+        .pb-val {
+            color: white;
+            font-weight: 700;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* BOTONES DE MINEROS */
+        .m-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 800;
+            min-width: 30px;
+            display: inline-block;
+            transition: all 0.2s ease;
+        }
+
+        .m-btn {
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .m-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .m-ok {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green-ok);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+
+        .m-bad {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--red-err);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .m-disabled {
+            opacity: 0.3;
+            cursor: default;
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+        }
+
+        /* ENLACE IP DIRECTO */
+        .ip-direct-link {
+            color: var(--blue-info);
+            font-family: 'JetBrains Mono', monospace;
+            text-decoration: none !important;
+            font-weight: 700;
+            outline: none;
+            transition: all 0.2s;
+            border-bottom: none !important;
+        }
+
+        .ip-direct-link:hover {
+            color: white;
+            text-shadow: 0 0 10px rgba(88, 166, 255, 0.8);
+        }
+
+        /* PANEL FLOTANTE COMPACTO */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9998;
+            backdrop-filter: blur(2px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-panel {
+            width: 350px;
+            max-height: 80vh;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dp-header {
+            background: #21262d;
+            padding: 10px 15px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            box-sizing: border-box;
+        }
+
+        .dp-title {
+            font-weight: 800;
+            color: white;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .dp-close {
+            cursor: pointer;
+            color: #8b949e;
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .dp-close:hover {
+            color: var(--red-err);
+        }
+
+        .m-list-header {
+            display: grid;
+            grid-template-columns: 70px 60px 70px 85px;
+            padding: 8px 15px;
+            background: #1c2128;
+            border-bottom: 1px solid #30363d;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-sub);
+            text-transform: uppercase;
+        }
+
+        .dp-body {
+            padding: 0;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+
+        .m-list-row {
+            display: grid;
+            grid-template-columns: 70px 60px 70px 85px;
+            padding: 5px 15px;
+            border-bottom: 1px solid #21262d;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-main);
+            align-items: center;
+            height: 28px;
+        }
+
+        .m-list-row.is-off {
+            background: rgba(248, 81, 73, 0.08);
+            color: #ff7b72;
+        }
+
+        .m-list-row.is-on {
+            color: #7ee787;
+        }
+
+        .m-list-row:hover {
+            background: #21262d;
+        }
+
+        /* TABS */
+        .tabs-container {
+            margin-bottom: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: var(--bg-header);
+            border: 1px solid var(--border);
+            color: var(--text-sub);
+            cursor: pointer;
+            font-weight: 600;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: #2d333b;
+        }
+
+        .tab.active {
+            background: var(--blue-info);
+            color: white;
+            border-color: var(--blue-info);
+        }
+
+        /* HEADER WAREHOUSES */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 6px;
+        }
+
+        .h-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .global-stats {
+            display: flex;
+            gap: 25px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+        }
+
+        .gs-label {
+            color: #8b949e;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        /* WAREHOUSES - v2.1 UPDATED SPACING */
+        .wh-container {
+            display: grid !important;
+            grid-template-columns: repeat(5, 1fr) !important;
+            gap: 40px !important;
+            row-gap: 10px !important;
+            justify-content: start;
+            max-width: 100%;
+            margin: 0 0 0 -15px;
+            padding: 0;
+        }
+
+        .wh-card {
+            background: var(--card-black);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            width: 100%;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .wh-card:hover {
+            border-color: var(--blue-info);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            transform: translateY(-5px);
+        }
+
+        /* STATS SECTION - SINGLE COLUMN LAYOUT */
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+        }
+
+        .stats-card {
+            background: var(--card-black);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            width: 100%;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .stats-card:hover {
+            border-color: var(--blue-info);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .wc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .wc-title {
+            font-size: 26px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -0.5px;
+            margin-top: 5px;
+        }
+
+        .wc-sync-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .wc-sync-status {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 2px;
+        }
+
+        .sync-live {
+            color: var(--ok-bright);
+            background: rgba(63, 185, 80, 0.15);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+
+        .sync-stale {
+            color: #8b949e;
+            background: rgba(48, 54, 61, 0.5);
+            border: 1px solid #30363d;
+        }
+
+        .wc-sync-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .blink {
+            animation: blinker 1.5s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .wc-hash {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            color: #58a6ff;
+            font-weight: bold;
+            background: rgba(88, 166, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 16px;
+            align-self: flex-start;
+        }
+
+        .wc-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            background: #0d1117;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #21262d;
+        }
+
+        .wc-metric {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .wc-lbl {
+            font-size: 11px;
+            color: #8b949e;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .wc-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            font-weight: 800;
+            color: #e6edf3;
+        }
+
+        .racks-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .rack-box {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            background: #21262d;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            line-height: 1.2;
+            padding: 6px 0;
+            font-size: 15px;
+        }
+
+        .rack-box:hover {
+            z-index: 10;
+            border-color: white;
+            transform: scale(1.15);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        .rb-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .rb-temp {
+            font-size: 13px;
+            font-weight: 800;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+
+        .rb-sync {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 2px;
+            font-weight: 400;
+        }
+
+        .rb-ok {
+            background: var(--ok);
+            color: white;
+        }
+
+        .rb-warn {
+            background: var(--warn);
+            color: white;
+        }
+
+        .rb-crit {
+            background: var(--err);
+            color: white;
+        }
+
+        .rb-off {
+            background: #1c2128;
+            border: 1px dashed #30363d;
+            color: #484f58;
+        }
+
+        /* TOOLTIP VUE */
+        #tooltip {
+            position: fixed;
+            display: none;
+            pointer-events: none;
+            z-index: 9999;
+            background: rgba(13, 17, 23, 0.98);
+            border: 1px solid #7d8590;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+            min-width: 160px;
+            max-width: 220px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-sub);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--blue-info);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Helpers */
+        .d-none {
+            display: none;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        /* RESPONSIVE GRID WAREHOUSES */
+        @media (max-width: 1850px) {
+            .wh-container {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 1450px) {
+            .wh-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .wh-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 750px) {
+            .wh-container {
+                grid-template-columns: 1fr;
+                max-width: 100%;
+            }
+
+            .wh-card {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app" class="wrapper">
+        <h2>🛡️ DASHBOARD CONTENEDORES Y WAREHOUSES</h2>
+
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab" :class="{active: currentTab === 'containers'}"
+                    @click="currentTab = 'containers'">Contenedores</button>
+                <button class="tab" :class="{active: currentTab === 'warehouses'}"
+                    @click="currentTab = 'warehouses'">Warehouses</button>
+                <button class="tab" :class="{active: currentTab === 'stats'}"
+                    @click="currentTab = 'stats'">Estadísticas</button>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'containers'">
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <h4>📡 Conectividad</h4>
+                    <div class="stat-content">
+                        • <b>Monitor:</b> Vue.js Reactive (5s update).<br>
+                        • <b>Sync:</b> <span class="hl-ok">● LIVE</span> / <span style="color:#8b949e">●
+                            STALE</span>.<br>
+                        • <b>Datos:</b> Incluye Temp PCB y Tiempo Activo.
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h4>⛏️ Acciones Interactivas</h4>
+                    <div class="stat-content">
+                        • <b>Ir a Contenedor:</b> Clic en la <span style="color:var(--blue-info)">IP Azul</span>.<br>
+                        • <b>Ver Detalle:</b> Clic en los botones de Mineros
+                        (Online/Offline).<br>
+                        • <b>Filtro:</b> Usa la barra de búsqueda para filtrar por IP o datos.
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h4>⚠️ Alertas Visuales</h4>
+                    <div class="stat-content">
+                        • <b>Fila Roja:</b> Falla Crítica (Fuga, Temp, Nivel, Presión).<br>
+                        • <b>Fila Amarilla:</b> Faltan mineros esperados.<br>
+                        • <b>Energía:</b> B1 (Azul) / B2 (Violeta).
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="search-box">
+                    <input type="text" v-model="searchQuery" placeholder="🔍 Filtrar por IP, mineros..." />
+                </div>
+
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th width="8%" @click="sortContainers('sync')" style="cursor: pointer;">
+                                Sync
+                                <span v-if="sortColumn === 'sync'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="12%" @click="sortContainers('ip')" style="cursor: pointer;">
+                                IP Enlace
+                                <span v-if="sortColumn === 'ip'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="12%" @click="sortContainers('mineros')" style="cursor: pointer;">
+                                Mineros
+                                <span v-if="sortColumn === 'mineros'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="10%" @click="sortContainers('hash')" style="cursor: pointer;">
+                                Hash (PH/s)
+                                <span v-if="sortColumn === 'hash'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="10%" @click="sortContainers('presion')" style="cursor: pointer;">
+                                Presión (S/R)
+                                <span v-if="sortColumn === 'presion'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="10%" @click="sortContainers('temp')" style="cursor: pointer;">
+                                Temp (Supply)
+                                <span v-if="sortColumn === 'temp'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="7%" @click="sortContainers('hum')" style="cursor: pointer;">
+                                Hum
+                                <span v-if="sortColumn === 'hum'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="16%" @click="sortContainers('consumo')" style="cursor: pointer;">
+                                Consumo (kW)
+                                <span v-if="sortColumn === 'consumo'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                            </th>
+                            <th width="15%" @click="sortContainers('diagnostico')" style="cursor: pointer;">
+                                Diagnóstico
+                                <span v-if="sortColumn === 'diagnostico'">
+                                    {{ sortDirection === 'asc' ? '▲' : '▼' }}
+                                </span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in filteredContainers" :key="c.ip_address" :class="getRowClass(c)">
+
+                            <td>
+                                <div style="display:flex; flex-direction:column; align-items:center;">
+                                    <span style="font-size:10px; font-weight:900; white-space:nowrap;"
+                                        :style="{color: isLive(c) ? '#3fb950' : '#848d97'}">
+                                        {{ isLive(c) ? '● LIVE' : '● STALE' }}
+                                    </span>
+                                    <span class="mono" style="font-size:10px; color:#ffffff; font-weight:bold;">{{
+                                        c.last_seen_str }}</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <a :href="'http://' + c.ip_address" target="_blank" class="ip-direct-link">{{
+                                    c.ip_address }}</a>
+                            </td>
+
+                            <td>
+                                <div style="display:flex; justify-content:center; gap:8px;">
+                                    <span class="m-badge m-ok m-btn"
+                                        @click="openModal('online', c.ip_address, c.miner_info)"
+                                        :title="'Ver ' + c.miner_num + ' mineros online'">
+                                        {{ c.miner_num }}
+                                    </span>
+                                    <span v-if="(c.total_expected - c.miner_num) > 0" class="m-badge m-bad m-btn"
+                                        @click="openModal('offline', c.ip_address, c.miner_info)"
+                                        :title="'Ver ' + (c.total_expected - c.miner_num) + ' mineros offline'">
+                                        {{ c.total_expected - c.miner_num }}
+                                    </span>
+                                    <span v-else class="m-badge m-disabled">0</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="mono" style="color:var(--green-ok); font-weight:700; font-size:1.1em;">{{
+                                    (c.total_hashrate_ph || 0).toFixed(2) }}</span>
+                            </td>
+
+                            <td>
+                                <span class="mono">{{ c.supply_liquid_pressure || 0 }} /
+                                    {{ c.return_liquid_pressure ||
+                                    0 }}</span>
+                            </td>
+
+                            <td><span class="mono">{{ c.supply_liquid_temp || 0 }}</span>
+                            </td>
+
+                            <td><b>{{ c.antbox_internal_humidity || 0 }}%</b></td>
+
+                            <td>
+                                <div class="pwr-box">
+                                    <span class="pwr-badge pb-1">B1 <span class="pb-val">{{ c.pwr_box1_kw
+                                            }}</span></span>
+                                    <span class="pwr-badge pb-2">B2 <span class="pb-val">{{ c.pwr_box2_kw
+                                            }}</span></span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div v-if="!c.online" class="status-pill sp-off">OFFLINE
+                                </div>
+                                <div v-else-if="getContainerAlerts(c).length === 0" class="status-pill sp-ok">NORMAL
+                                </div>
+                                <div v-else style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                                    <span v-for="alert in getContainerAlerts(c)" :class="'status-pill ' + alert.cls"
+                                        :key="alert.txt">
+                                        {{ alert.txt }}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="filteredContainers.length === 0" style="text-align:center; padding:20px; color:#8b949e">
+                    Sin resultados...
+                </div>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'warehouses'">
+            <div class="header">
+                <div class="h-title">🏭 VISTA GENERAL WAREHOUSES</div>
+                <div class="global-stats">
+                    <div><span class="gs-label">TOTAL HASH:</span> <span style="color:#58a6ff">{{
+                            (whGlobal.hash /
+                            1000).toFixed(2) }} PH/s</span></div>
+                    <div><span class="gs-label">TOTAL ON:</span> <span style="color:#3fb950">{{
+                            whGlobal.on }}</span>
+                    </div>
+                    <div><span class="gs-label">TOTAL OFF:</span> <span style="color:#f85149">{{
+                            whGlobal.off }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="loadingWh" class="loading">
+                <div class="spinner"></div>
+                <p>Cargando datos de warehouses...</p>
+            </div>
+
+            <div v-else class="wh-container">
+                <div v-for="wh in sortedWarehouses" :key="wh.name" class="wh-card">
+                    <div class="wc-header">
+                        <div class="wc-title">{{ wh.name }}</div>
+                        <div class="wc-sync-box">
+                            <div v-if="isWhLive(wh.lastUpdated)" class="wc-sync-status sync-live"><span
+                                    class="blink">●</span> LIVE</div>
+                            <div v-else class="wc-sync-status sync-stale">● STALE</div>
+                            <div class="wc-sync-time">{{ formatTime(wh.lastUpdated) }}</div>
+                        </div>
+                    </div>
+                    <div class="wc-hash">{{ (wh.totalHashrate / 1000).toFixed(1) }} PH</div>
+
+                    <div class="wc-details">
+                        <div class="wc-metric">
+                            <span class="wc-lbl">MAQUINAS</span>
+                            <span class="wc-val">
+                                <span style="color:#7ee787">{{ wh.onlineMiners }}</span>
+                                /
+                                <span style="color:#f85149">{{ wh.totalMiners -
+                                    wh.onlineMiners }}</span>
+                            </span>
+                        </div>
+                        <div class="wc-metric text-right">
+                            <span class="wc-lbl">ESTADO</span>
+                            <span class="wc-val">
+                                <span :style="{color: getHealthColor(wh.health)}">{{
+                                    wh.health }}%</span>
+                                <span style="color:#8b949e; margin-left:5px">({{
+                                    wh.avgTemp }}°C)</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="racks-grid">
+                        <div v-for="r in 16" :key="r" class="rack-box" :class="getRackClass(wh.racks[r])"
+                            @mouseenter="showTooltip($event, wh.name, r, wh.racks[r])" @mouseleave="hideTooltip">
+
+                            <span class="rb-title">R{{ r }}</span>
+                            <template v-if="wh.racks[r] && wh.racks[r].total > 0">
+                                <span class="rb-temp">{{
+                                    getAvgTemp(wh.racks[r].tempChip) }}°</span>
+                                <span class="rb-sync">{{
+                                    formatTime(wh.racks[r].lastUpdated) }}</span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ✨ MEJORA #2: Loading indicator -->
+            <div v-if="loading.warehouses && Object.keys(warehousesData).length === 0" class="loading">
+                <div class="spinner"></div>
+                <div>Cargando datos de warehouses...</div>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'stats'">
+            <div class="header">
+                <div class="h-title">📊 ESTADÍSTICAS GLOBALES</div>
+                <div class="global-stats">
+                    <div><span class="gs-label">TOTAL HASH:</span> <span style="color:#58a6ff">{{
+                            stats.miners?.hashrate_ph }} PH/s</span></div>
+                    <div><span class="gs-label">TOTAL MINEROS:</span> <span style="color:white">{{
+                            stats.miners?.total
+                            }}</span></div>
+                </div>
+            </div>
+
+            <div class="stats-container">
+                <div class="stats-card">
+                    <div class="wc-header">
+                        <div class="wc-title">Resumen del Sistema</div>
+                        <div class="wc-sync-box">
+                            <div class="wc-sync-status sync-live"><span class="blink">●</span> LIVE</div>
+                            <div class="wc-sync-time">{{
+                                formatTime(stats.summary?.last_updated) }}</div>
+                        </div>
+                    </div>
+
+                    <div class="wc-details"
+                        style="grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px;">
+                        <div class="wc-metric">
+                            <span class="wc-lbl">Contenedores</span>
+                            <span class="wc-val">{{ stats.summary?.online_containers }}/{{
+                                stats.summary?.total_containers }}</span>
+                        </div>
+                        <div class="wc-metric">
+                            <span class="wc-lbl">Warehouses</span>
+                            <span class="wc-val">{{ stats.summary?.online_warehouses }}/{{
+                                stats.summary?.total_warehouses }}</span>
+                        </div>
+                        <div class="wc-metric">
+                            <span class="wc-lbl">Hashrate Total</span>
+                            <span class="wc-val" style="color:#58a6ff">{{
+                                stats.summary?.total_hashrate_ph }}
+                                PH/s</span>
+                        </div>
+                        <div class="wc-metric">
+                            <span class="wc-lbl">Consumo Total</span>
+                            <span class="wc-val" style="color:#d29922">{{
+                                stats.summary?.total_power_mw }} MW</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                        <div>
+                            <div class="wc-lbl" style="margin-bottom: 10px;">Estadísticas
+                                por Tipo</div>
+                            <div style="color:#8b949e; font-size: 12px;">
+                                <div style="margin-bottom: 5px;">• Contenedores: <span style="color:#7ee787">{{
+                                        stats.summary?.online_containers
+                                        }}</span> ({{ stats.summary?.containers_percentage }}%)</div>
+                                <div style="margin-bottom: 5px;">• Warehouses: <span style="color:#7ee787">{{
+                                        stats.summary?.online_warehouses
+                                        }}</span> ({{
+                                    stats.summary?.warehouses_percentage }}%)</div>
+                                <div>• Mineros: <span style="color:#7ee787">{{
+                                        stats.summary?.online_miners }}</span>
+                                    ({{ stats.summary?.miners_percentage }}%)</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="wc-lbl" style="margin-bottom: 10px;">Salud del Sistema</div>
+                            <div style="font-size: 24px; font-weight: bold;" :style="{color: getSystemHealthColor()}">
+                                {{ stats.summary?.system_health }}%
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ✨ MEJORA #3: Health Check Card -->
+                <div class="stats-card">
+                    <div class="wc-header">
+                        <div class="wc-title">🏥 Health Check</div>
+                        <div class="wc-sync-box">
+                            <div v-if="loading.health" class="wc-sync-status sync-stale">⏳
+                                Loading...</div>
+                            <div v-else class="wc-sync-status sync-live"><span class="blink">●</span> LIVE</div>
+                        </div>
+                    </div>
+
+                    <div v-if="health" class="wc-details"
+                        style="grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 0;">
+                        <div class="wc-metric">
+                            <span class="wc-lbl">⚡ Backpressure</span>
+                            <span class="wc-val"
+                                :style="{color: health.backpressure?.active_racks >= health.backpressure?.max_allowed ? '#f85149' : '#3fb950'}">
+                                {{ health.backpressure?.active_racks || 0 }}/{{
+                                health.backpressure?.max_allowed || 8 }}
+                                Racks
+                            </span>
+                        </div>
+                        <div class="wc-metric">
+                            <span class="wc-lbl">⏱️ Latencia Avg</span>
+                            <span class="wc-val"
+                                :style="{color: (health.metrics?.avg_latency || 0) > 1000 ? '#f85149' : '#3fb950'}">
+                                {{ (health.metrics?.avg_latency || 0).toFixed(1) }} ms
+                            </span>
+                        </div>
+                        <div class="wc-metric">
+                            <span class="wc-lbl">🔌 Circuit Breaker</span>
+                            <span class="wc-val"
+                                :style="{color: (health.metrics?.cb_size || 0) > 100 ? '#f85149' : '#8b949e'}">
+                                {{ health.metrics?.cb_size || 0 }} IPs blocked
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-if="health"
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #21262d;">
+                        <div>
+                            <div class="wc-lbl" style="margin-bottom: 10px;">📊 Métricas de
+                                Red</div>
+                            <div style="color:#8b949e; font-size: 12px;">
+                                <div style="margin-bottom: 5px;">• Requests Total: <span style="color:#7ee787">{{
+                                        health.metrics?.total_reqs || 0
+                                        }}</span></div>
+                                <div style="margin-bottom: 5px;">• Requests Failed:
+                                    <span
+                                        :style="{color: (health.metrics?.failed_reqs || 0) > 100 ? '#f85149' : '#7ee787'}">{{
+                                        health.metrics?.failed_reqs || 0
+                                        }}</span>
+                                </div>
+                                <div>• Success Rate: <span style="color:#7ee787">{{ ((1
+                                        - (health.metrics?.failed_reqs
+                                        || 0) / (health.metrics?.total_reqs ||
+                                        1)) * 100).toFixed(1) }}%</span></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="wc-lbl" style="margin-bottom: 10px;">⏳ Tasks Lag
+                            </div>
+                            <div style="color:#8b949e; font-size: 12px;">
+                                <div style="margin-bottom: 5px;">• Containers: <span
+                                        :style="{color: (health.tasks_lag?.containers || 0) < 30 ? '#7ee787' : '#f85149'}">{{
+                                        health.tasks_lag?.containers || 0
+                                        }}s</span></div>
+                                <div>• Warehouses: <span
+                                        :style="{color: (health.tasks_lag?.warehouses || 0) < 60 ? '#7ee787' : '#f85149'}">{{
+                                        health.tasks_lag?.warehouses || 0 }}s</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div v-if="modalOpen" class="modal-overlay" @click.self="closeModal">
+            <div class="modal-panel">
+                <div class="dp-header">
+                    <span class="dp-title" v-html="modalTitle"></span>
+                    <span class="dp-close" @click="closeModal">&times;</span>
+                </div>
+                <div class="m-list-header">
+                    <span>IP</span>
+                    <span>Temp</span>
+                    <span>Hash</span>
+                    <span style="text-align:right">Tiempo Activo</span>
+                </div>
+                <div class="dp-body">
+                    <div v-if="selectedMiners.length === 0" style="padding:20px; text-align:center; color:#8b949e">
+                        No hay mineros en esta categoría
+                    </div>
+                    <div v-for="m in selectedMiners" :key="m.ip" class="m-list-row"
+                        :class="m.hashrate <= 0 ? 'is-off' : 'is-on'">
+                        <span class="c-ip">.{{ m.ip.split('.').pop() }}</span>
+                        <span class="c-temp">{{ m.temp > 0 ? m.temp + '°C' : '--' }}</span>
+                        <span class="c-hash">{{ parseFloat(m.hashrate).toFixed(0) }} T</span>
+                        <span class="c-time" style="text-align:right">{{ formatElapsed(m.elapsed) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tooltip" v-show="tooltip.visible"
+            :style="{top: tooltip.top + 'px', left: tooltip.left + 'px', display: tooltip.visible ? 'block' : 'none'}">
+            <div
+                style="font-weight:bold; color:#58a6ff; margin-bottom:6px; border-bottom:1px solid #30363d; padding-bottom:4px;">
+                {{ tooltip.title }}
+            </div>
+            <div v-if="tooltip.status" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Estado:</span>
+                <span style="font-weight:bold;" :style="{color: tooltip.statusColor}">{{ tooltip.status
+                    }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Salud:</span>
+                <span style="font-weight:bold;" :style="{color: tooltip.healthColor}">{{ tooltip.pct
+                    }}%</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Temp Avg:</span>
+                <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp
+                    }}°C</span>
+            </div>
+            <div
+                style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; border-top:1px solid #30363d; padding-top:4px;">
+                <span style="color:#7ee787">ON: {{ tooltip.on }}</span>
+                <span style="color:#f85149">OFF: {{ tooltip.off }}</span>
+            </div>
+        </div>
+
+    </div>
+
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    currentTab: 'containers',
+                    containers: [],
+                    warehousesData: {}, // Objeto procesado
+                    whGlobal: { hash: 0, on: 0, off: 0 },
+                    stats: {},
+                    health: null, // ← MEJORA #3: Health check
+                    searchQuery: '',
+
+                    // Sorting state
+                    sortColumn: null,
+                    sortDirection: 'asc',
+                    // ← MEJORA #2: Loading states
+                    loading: {
+                        containers: false,
+                        warehouses: false,
+                        stats: false,
+                        health: false
+                    },
+
+                    // Modal
+                    modalOpen: false,
+                    modalTitle: '',
+                    selectedMiners: [],
+
+                    // Tooltip
+                    tooltip: {
+                        visible: false,
+                        top: 0,
+                        left: 0,
+                        title: '',
+                        pct: 0,
+                        temp: 0,
+                        on: 0,
+                        off: 0,
+                        healthColor: '',
+                        tempColor: ''
+                    }
+                }
+            },
+            computed: {
+                filteredContainers() {
+                    let result = this.containers;
+
+                    // Apply search filter
+                    if (this.searchQuery) {
+                        const query = this.searchQuery.toLowerCase();
+                        result = result.filter(c => {
+                            let text = c.ip_address + (c.online ? ' live' : ' stale');
+                            if (c.miner_info) text += JSON.stringify(c.miner_info);
+                            return text.toLowerCase().includes(query);
+                        });
+                    }
+
+                    // Apply sorting
+                    if (this.sortColumn) {
+                        result = [...result].sort((a, b) => {
+                            const valueA = this.getColumnValue(a, this.sortColumn);
+                            const valueB = this.getColumnValue(b, this.sortColumn);
+
+                            let comparison = 0;
+
+                            // Handle different data types
+                            if (typeof valueA === 'number' && typeof valueB === 'number') {
+                                comparison = valueA - valueB;
+                            } else if (typeof valueA === 'string' && typeof valueB === 'string') {
+                                // Natural sort for IP addresses and strings
+                                comparison = valueA.localeCompare(valueB, undefined, { numeric: true });
+                            } else {
+                                comparison = valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
+                            }
+
+                            return this.sortDirection === 'asc' ? comparison : -comparison;
+                        });
+                    }
+
+                    return result;
+                },
+                sortedWarehouses() {
+                    return Object.values(this.warehousesData).sort((a, b) => {
+                        const numA = parseInt(a.name.replace('WH', '')) || 0;
+                        const numB = parseInt(b.name.replace('WH', '')) || 0;
+                        return numA - numB;
+                    });
+                }
+            },
+            methods: {
+                // --- FETCHING DATA ---
+                async fetchContainers() {
+                    this.loading.containers = true;
+                    try {
+                        const res = await fetch('/api/containers');
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        this.containers = await res.json();
+                    } catch (e) {
+                        console.error("Error containers", e);
+                    } finally {
+                        this.loading.containers = false;
+                    }
+                },
+                async fetchStats() {
+                    this.loading.stats = true;
+                    try {
+                        const res = await fetch('/api/stats');
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        this.stats = await res.json();
+                    } catch (e) {
+                        console.error("Error stats", e);
+                    } finally {
+                        this.loading.stats = false;
+                    }
+                },
+                async fetchWarehouses() {
+                    this.loading.warehouses = true;
+                    try {
+                        const res = await fetch('/api/air');
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const data = await res.json();
+                        this.processWarehouseData(data);
+                    } catch (e) {
+                        console.error("Error warehouses", e);
+                    } finally {
+                        this.loading.warehouses = false;
+                    }
+                },
+                async fetchHealth() {
+                    this.loading.health = true;
+                    try {
+                        const res = await fetch('/api/health');
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        this.health = await res.json();
+                    } catch (e) {
+                        console.error("Error health", e);
+                    } finally {
+                        this.loading.health = false;
+                    }
+                },
+
+                // --- PROCESAMIENTO DE DATOS WAREHOUSE (Logica migrada de JS puro) ---
+                processWarehouseData(data) {
+                    let whMap = {};
+                    let gOn = 0, gOff = 0, gHash = 0;
+
+                    data.forEach(miner => {
+                        const whName = miner.wh;
+                        const rackNum = miner.rack;
+
+                        if (!whMap[whName]) {
+                            whMap[whName] = {
+                                name: whName,
+                                racks: {},
+                                totalMiners: 0,
+                                onlineMiners: 0,
+                                totalHashrate: 0,
+                                lastUpdated: 0,
+                                avgTemp: 0
+                            };
+                        }
+
+                        // Global counters
+                        if (miner.online) { gOn++; gHash += miner.hashrate; } else { gOff++; }
+
+                        // Rack initialization
+                        if (!whMap[whName].racks[rackNum]) {
+                            whMap[whName].racks[rackNum] = {
+                                online: 0, total: 0, tempChip: [], lastUpdated: 0
+                            };
+                        }
+
+                        // Update Rack
+                        const rack = whMap[whName].racks[rackNum];
+                        rack.total++;
+                        if (miner.online) {
+                            rack.online++;
+                            whMap[whName].onlineMiners++;
+                            whMap[whName].totalHashrate += miner.hashrate;
+                            if (miner.temp_chip > 0) rack.tempChip.push(miner.temp_chip);
+                        }
+                        if (miner.updated > rack.lastUpdated) rack.lastUpdated = miner.updated;
+                        if (miner.updated > whMap[whName].lastUpdated) whMap[whName].lastUpdated = miner.updated;
+                        whMap[whName].totalMiners++;
+                    });
+
+                    // Calcular Avg Temp Warehouse
+                    Object.values(whMap).forEach(wh => {
+                        let temps = [];
+                        Object.values(wh.racks).forEach(r => temps.push(...r.tempChip));
+                        wh.avgTemp = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : 0;
+                        wh.health = wh.totalMiners > 0 ? Math.round((wh.onlineMiners / wh.totalMiners) * 100) : 0;
+                    });
+
+                    this.warehousesData = whMap;
+                    this.whGlobal = { hash: gHash, on: gOn, off: gOff };
+                },
+
+                // --- HELPERS VISUALES CONTENEDORES ---
+                isLive(row) {
+                    let diff = Math.floor(Date.now() / 1000) - row.last_seen;
+                    return diff < 30 && row.online;
+                },
+                getContainerAlerts(r) {
+                    let alerts = [];
+                    if (r.leakage_fault) alerts.push({ txt: '⚠️ FUGA', cls: 'sp-crit' });
+                    if (r.temp_fault) alerts.push({ txt: '🔥 TEMP', cls: 'sp-crit' });
+                    if (r.liquid_level_low) alerts.push({ txt: 'NIVEL TANQUE', cls: 'sp-crit' });
+                    if (r.supply_liquid_pressure_high) alerts.push({ txt: 'PRES. ALTA', cls: 'sp-crit' });
+                    if (r.supply_liquid_flow_low) alerts.push({ txt: 'FLUJO BAJO', cls: 'sp-crit' });
+                    if (r.return_liquid_pressure_low) alerts.push({ txt: 'P. RET BAJA', cls: 'sp-crit' });
+                    if (r.cooling_tower_liquid_level_low) alerts.push({ txt: 'NIVEL TORRE', cls: 'sp-crit' });
+                    if (r.miner_num < r.total_expected) alerts.push({ txt: 'MIN OFF', cls: 'sp-warn' });
+                    return alerts;
+                },
+                getRowClass(r) {
+                    let alerts = this.getContainerAlerts(r);
+                    let hasCrit = alerts.some(a => a.cls === 'sp-crit');
+                    if (!r.online || hasCrit) return 'row-alert';
+                    return '';
+                },
+                getSeverityLevel(container) {
+                    // Returns numeric severity: higher = more severe
+                    if (!container.online) return 3; // Offline is critical
+                    const alerts = this.getContainerAlerts(container);
+                    if (alerts.length === 0) return 0; // Normal
+                    const hasCrit = alerts.some(a => a.cls === 'sp-crit');
+                    const hasWarn = alerts.some(a => a.cls === 'sp-warn');
+                    if (hasCrit) return 3; // Critical
+                    if (hasWarn) return 2; // Warning
+                    return 1; // Other alerts
+                },
+                getColumnValue(container, column) {
+                    // Extract sortable value for each column
+                    switch (column) {
+                        case 'sync':
+                            return container.last_seen || 0;
+                        case 'ip':
+                            return container.ip_address || '';
+                        case 'mineros':
+                            return container.miner_num || 0;
+                        case 'hash':
+                            return container.total_hashrate_ph || 0;
+                        case 'presion':
+                            return container.supply_liquid_pressure || 0;
+                        case 'temp':
+                            return container.supply_liquid_temp || 0;
+                        case 'hum':
+                            return container.antbox_internal_humidity || 0;
+                        case 'consumo':
+                            return (parseFloat(container.pwr_box1_kw) || 0) + (parseFloat(container.pwr_box2_kw) || 0);
+                        case 'diagnostico':
+                            return this.getSeverityLevel(container);
+                        default:
+                            return 0;
+                    }
+                },
+                sortContainers(column) {
+                    if (this.sortColumn === column) {
+                        // Toggle direction if clicking same column
+                        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        // New column: start with descending (most severe first)
+                        this.sortColumn = column;
+                        this.sortDirection = 'desc';
+                    }
+                },
+
+                // --- HELPERS VISUALES WAREHOUSES ---
+                isWhLive(ts) { return (Math.floor(Date.now() / 1000) - ts) < 60; },
+                getHealthColor(pct) { return pct > 95 ? '#3fb950' : (pct > 80 ? '#d29922' : '#f85149'); },
+                getAvgTemp(temps) { return temps && temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : 0; },
+                getRackClass(rack) {
+                    if (!rack || rack.total === 0) return 'rb-off';
+                    const temp = this.getAvgTemp(rack.tempChip);
+                    const health = (rack.online / rack.total) * 100;
+
+                    if (health < 75 || temp >= 40) return 'rb-crit';
+                    if (health < 90 || temp >= 36) return 'rb-warn';
+                    return 'rb-ok';
+                },
+
+                // --- MODAL LOGIC ---
+                openModal(type, ip, minersObj) {
+                    const minersArr = [];
+                    if (minersObj) {
+                        Object.keys(minersObj).forEach(key => {
+                            minersArr.push({ ip: key, ...minersObj[key] });
+                        });
+                    }
+                    // Sort IPs natural
+                    minersArr.sort((a, b) => a.ip.localeCompare(b.ip, undefined, { numeric: true }));
+
+                    // Filter logic
+                    this.selectedMiners = minersArr.filter(m => {
+                        const isOff = parseFloat(m.hashrate || 0) <= 0;
+                        if (type === 'online') return !isOff;
+                        if (type === 'offline') return isOff;
+                        return true;
+                    });
+
+                    const color = type === 'online' ? '#3fb950' : '#f85149';
+                    const label = type === 'online' ? 'ONLINE' : 'OFFLINE';
+                    this.modalTitle = `Mineros <span style="color:${color}">${label}</span> en ${ip} (${this.selectedMiners.length})`;
+                    this.modalOpen = true;
+                },
+                closeModal() { this.modalOpen = false; },
+
+                // --- TOOLTIP LOGIC ---
+                showTooltip(e, whName, rackNum, rackData) {
+                    if (!rackData || rackData.total === 0) return;
+
+                    const rect = e.target.getBoundingClientRect();
+                    const temp = this.getAvgTemp(rackData.tempChip);
+                    const pct = Math.round((rackData.online / rackData.total) * 100);
+
+                    // ← MEJORA #5: Indicador de estado de procesamiento
+                    const now = Date.now() / 1000;
+                    const age = now - rackData.lastUpdated;
+                    let status = '🟢 Live';
+                    let statusColor = '#3fb950';
+                    if (age > 60) {
+                        status = '⚫ Stale';
+                        statusColor = '#8b949e';
+                    } else if (age > 10) {
+                        status = '🟡 Processing...';
+                        statusColor = '#d29922';
+                    }
+
+                    this.tooltip = {
+                        visible: true,
+                        // Centrado arriba del elemento
+                        top: rect.top - 100, // Ajuste aprox
+                        left: rect.left + (rect.width / 2) - 80, // Ajuste aprox ancho tooltip
+                        title: `${whName} - RACK ${rackNum}`,
+                        pct: pct,
+                        temp: temp,
+                        on: rackData.online,
+                        off: rackData.total - rackData.online,
+                        status: status,
+                        statusColor: statusColor,
+                        healthColor: pct < 75 ? '#f85149' : (pct < 90 ? '#d29922' : '#3fb950'),
+                        tempColor: temp >= 40 ? '#f85149' : (temp >= 36 ? '#d29922' : '#7ee787')
+                    };
+
+                    // Ajuste fino de posición (similar a tu JS original)
+                    this.$nextTick(() => {
+                        const el = document.getElementById('tooltip');
+                        if (el) {
+                            this.tooltip.top = rect.top - el.offsetHeight - 10;
+                        }
+                    });
+                },
+                hideTooltip() { this.tooltip.visible = false; },
+
+                // --- UTILS ---
+                formatTime(ts) {
+                    if (!ts) return '--:--:--';
+                    return new Date(ts * 1000).toLocaleTimeString('es-ES', { hour12: false });
+                },
+                formatElapsed(seconds) {
+                    if (!seconds) return "--";
+                    const d = Math.floor(seconds / (3600 * 24));
+                    const h = Math.floor(seconds % (3600 * 24) / 3600);
+                    const m = Math.floor(seconds % 3600 / 60);
+                    if (d > 0) return `${d}d ${h}h ${m}m`;
+                    return `${h}h ${m}m ${Math.floor(seconds % 60)}s`;
+                },
+                getSystemHealthColor() {
+                    const h = this.stats.summary?.system_health || 0;
+                    return h > 90 ? '#3fb950' : (h > 75 ? '#d29922' : '#f85149');
+                }
+            },
+            watch: {
+                // ← MEJORA #4: Cargar datos al cambiar de tab
+                currentTab(newTab) {
+                    if (newTab === 'warehouses' && Object.keys(this.warehousesData).length === 0) {
+                        this.fetchWarehouses();
+                    }
+                    if (newTab === 'stats') {
+                        this.fetchStats();
+                        this.fetchHealth();
+                    }
+                }
+            },
+            mounted() {
+                // Fetch inicial
+                this.fetchContainers();
+                this.fetchStats();
+                this.fetchHealth(); // ← MEJORA #3
+
+                // ← MEJORA #4: Timers optimizados
+                setInterval(() => {
+                    if (this.currentTab === 'containers') this.fetchContainers();
+                    if (this.currentTab === 'stats') {
+                        this.fetchStats();
+                        this.fetchHealth(); // Actualizar health en stats
+                    }
+                }, 5000);
+
+                setInterval(() => {
+                    if (this.currentTab === 'warehouses') this.fetchWarehouses();
+                }, 10000); // ← 30s → 10s para mejor responsividad
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

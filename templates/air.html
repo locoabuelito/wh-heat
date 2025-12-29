@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Master Dashboard - Crypto Turbo</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+    <style>
+        /* --- ESTILOS BASE (TU DISEÑO ORIGINAL) --- */
+        :root {
+            --bg-body: #0d1117;
+            --bg-card: #161b22;
+            --bg-header: #21262d;
+            --border: #30363d;
+            --text-main: #e6edf3;
+            --text-sub: #848d97;
+            --green-ok: #3fb950;
+            --red-err: #f85149;
+            --blue-info: #58a6ff;
+            --orange-warn: #d29922;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-body);
+            color: var(--text-main);
+            margin: 0;
+            padding: 25px;
+            font-size: 14px;
+        }
+
+        .wrapper {
+            max-width: 1850px;
+            margin: auto;
+        }
+
+        /* HEADER & SYNC */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 15px;
+            margin-bottom: -1px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            padding: 12px 25px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-btn:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .tab-btn.active {
+            color: var(--blue-info);
+            border-bottom-color: var(--blue-info);
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        /* SYNC INDICATOR */
+        .sync-box {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-sub);
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .blink {
+            width: 8px;
+            height: 8px;
+            background: var(--green-ok);
+            border-radius: 50%;
+            display: inline-block;
+            animation: blinker 1.5s linear infinite;
+            box-shadow: 0 0 5px var(--green-ok);
+        }
+
+        .offline-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-sub);
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* CONTROLS (Search) */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0 15px 0;
+        }
+
+        h2 {
+            font-weight: 800;
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+        }
+
+        .search-input {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            width: 250px;
+            transition: border 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--blue-info);
+        }
+
+        /* TABLES */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            background: var(--bg-header);
+            color: var(--text-sub);
+            padding: 12px 15px;
+            text-transform: uppercase;
+            font-size: 11px;
+            text-align: left;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        tbody td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #262c36;
+            color: white;
+            vertical-align: middle;
+            font-size: 13px;
+        }
+
+        tbody tr {
+            transition: background 0.1s;
+            cursor: default;
+        }
+
+        tbody tr:hover {
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        /* COMPONENTES VISUALES */
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        /* STATUS PILLS (Estilo DataTables) */
+        .status-pill {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .sp-ok {
+            background: rgba(63, 185, 80, 0.15);
+            color: #7ee787;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+
+        .sp-crit {
+            background: rgba(248, 81, 73, 0.15);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .sp-warn {
+            background: rgba(210, 153, 34, 0.15);
+            color: #d29922;
+            border: 1px solid rgba(210, 153, 34, 0.3);
+        }
+
+        /* ALERTAS INTELIGENTES (Estilo Vue Turbo) */
+        .alert-badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(248, 81, 73, 0.1);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.4);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 4px;
+        }
+
+        .alert-badge i {
+            font-style: normal;
+        }
+
+        /* BADGES INFO */
+        .pwr-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: rgba(56, 139, 253, 0.1);
+            color: #79c0ff;
+            border: 1px solid rgba(56, 139, 253, 0.3);
+            margin-right: 4px;
+            display: inline-block;
+        }
+
+        .wh-badge {
+            background: #30363d;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 11px;
+            border: 1px solid #484f58;
+        }
+
+        .rack-badge {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--blue-info);
+            font-weight: 800;
+            font-size: 12px;
+            background: rgba(88, 166, 255, 0.1);
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+
+        a.ip-link {
+            color: var(--blue-info);
+            text-decoration: none;
+            font-weight: 700;
+            transition: color 0.2s;
+        }
+
+        a.ip-link:hover {
+            color: white;
+            text-decoration: underline;
+        }
+
+        /* TOOLTIP FLOTANTE */
+        #tooltip {
+            position: fixed;
+            display: none;
+            pointer-events: none;
+            z-index: 9999;
+            background: rgba(13, 17, 23, 0.98);
+            border: 1px solid #7d8590;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            min-width: 150px;
+            color: white;
+        }
+
+        .tt-header {
+            border-bottom: 1px solid #444;
+            margin-bottom: 5px;
+            padding-bottom: 5px;
+            font-weight: 800;
+            color: var(--blue-info);
+        }
+
+        .tt-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app" class="wrapper">
+
+        <div class="top-bar">
+            <div class="tabs">
+                <button class="tab-btn" :class="{active: currentTab === 'containers'}"
+                    @click="currentTab = 'containers'">📦 Contenedores</button>
+                <button class="tab-btn" :class="{active: currentTab === 'warehouses'}"
+                    @click="currentTab = 'warehouses'">🏭 Warehouses</button>
+            </div>
+            <div class="sync-box">
+                <span v-if="connected" class="blink"></span>
+                <span v-else class="offline-dot"></span>
+                <span>{{ lastUpdateText }}</span>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'containers'">
+            <div class="section-header">
+                <h2>🛡️ Estado Contenedores</h2>
+                <input v-model="searchHydro" type="text" class="search-input" placeholder="🔍 Buscar IP, Estado...">
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="8%" class="text-center">Estado</th>
+                            <th width="12%">IP Enlace</th>
+                            <th width="15%">Mineros</th>
+                            <th width="12%">Hash (PH/s)</th>
+                            <th width="12%">Presión (S/R)</th>
+                            <th width="10%">Temp Supply</th>
+                            <th width="14%">Energía (kW)</th>
+                            <th width="20%">Diagnóstico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in filteredContainers" :key="c.ip_address"
+                            @mousemove="showTooltip($event, c, 'hydro')" @mouseleave="hideTooltip">
+                            <td class="text-center">
+                                <span v-if="c.online" class="status-pill sp-ok">LIVE</span>
+                                <span v-else class="status-pill sp-crit">OFF</span>
+                            </td>
+                            <td>
+                                <a :href="'http://' + c.ip_address" target="_blank" class="ip-link mono">{{ c.ip_address
+                                    }}</a>
+                            </td>
+                            <td>
+                                <span class="mono"
+                                    :style="{color: (c.miner_num < c.total_expected) ? '#d29922' : 'white', fontWeight: 'bold'}">{{
+                                    c.miner_num }}</span>
+                                <span class="mono" style="color:#8b949e">/ {{ c.total_expected }}</span>
+                            </td>
+                            <td>
+                                <span class="mono" style="color:#7ee787; font-weight:700;">{{
+                                    parseFloat(c.total_hashrate_ph).toFixed(2) }} PH</span>
+                            </td>
+                            <td class="mono">
+                                {{ c.supply_liquid_pressure }} / {{ c.return_liquid_pressure }}
+                            </td>
+                            <td>
+                                <span class="mono"
+                                    :style="{color: c.supply_liquid_temp > 45 ? '#f85149' : '#d2a8ff'}">{{
+                                    c.supply_liquid_temp }}°C</span>
+                            </td>
+                            <td>
+                                <div style="display:flex; flex-direction:column; gap:2px;">
+                                    <span class="pwr-badge">B1: {{ c.pwr_box1_kw }}</span>
+                                    <span class="pwr-badge">B2: {{ c.pwr_box2_kw }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div v-if="hasAlerts(c)" style="display:flex; flex-wrap:wrap; gap:4px;">
+                                    <span v-if="c.leakage_fault" class="alert-badge">💧 FUGA</span>
+                                    <span v-if="c.temp_fault" class="alert-badge">🔥 TEMP</span>
+                                    <span v-if="c.liquid_level_low" class="alert-badge">📉 NIVEL</span>
+                                </div>
+                                <span v-else style="color:#3fb950; font-weight:bold; font-size:11px;">NORMAL</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'warehouses'">
+            <div class="section-header">
+                <h2>🏭 Estado Warehouses (Racks)</h2>
+                <input v-model="searchAir" type="text" class="search-input" placeholder="🔍 Buscar Rack/WH...">
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="10%">Warehouse</th>
+                            <th width="10%">Rack #</th>
+                            <th width="15%">Red / Subnet</th>
+                            <th width="15%">Mineros Online</th>
+                            <th width="15%">Hash Total</th>
+                            <th width="15%">Temp Promedio</th>
+                            <th width="20%" class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in filteredWarehouses" :key="r.id" @mousemove="showTooltip($event, r, 'air')"
+                            @mouseleave="hideTooltip">
+                            <td><span class="wh-badge">{{ r.whName }}</span></td>
+                            <td><span class="rack-badge">RACK {{ r.num }}</span></td>
+                            <td>
+                                <span class="mono" style="color:#8b949e">{{ extractSubnet(r.sampleIp) }}.X</span>
+                            </td>
+                            <td>
+                                <b :style="{color: r.on < 10 ? '#f85149' : 'white'}">{{ r.on }}</b>
+                                <span style="font-size:10px; color:#8b949e">/ 180</span>
+                            </td>
+                            <td>
+                                <span class="mono" style="color:#d2a8ff; font-weight:800;">{{ r.hashPH }} TH</span>
+                            </td>
+                            <td>
+                                <span class="mono" :style="{color: r.avgTemp > 75 ? '#f85149' : '#e6edf3'}"><b>{{
+                                        r.avgTemp }}</b> °C</span>
+                            </td>
+                            <td class="text-center">
+                                <span v-if="r.total === 0" class="status-pill sp-crit">EMPTY</span>
+                                <span v-else-if="r.health < 50" class="status-pill sp-crit">CRITICAL</span>
+                                <span v-else-if="r.health < 90" class="status-pill sp-warn">WARN</span>
+                                <span v-else class="status-pill sp-ok">ONLINE</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tooltip" ref="tooltipEl">
+            <div v-if="ttData">
+                <div class="tt-header">{{ ttData.title }}</div>
+                <div class="tt-row" v-for="(val, key) in ttData.rows">
+                    <span style="color:#8b949e">{{ key }}:</span>
+                    <span style="font-weight:bold; color:white">{{ val }}</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('containers');
+                const hydroData = ref([]);
+                const airData = ref([]);
+                const searchHydro = ref('');
+                const searchAir = ref('');
+                const lastUpdateText = ref('Conectando...');
+                const connected = ref(false);
+
+                // Tooltip State
+                const tooltipEl = ref(null);
+                const ttData = ref(null);
+
+                // Fetch Data
+                const fetchData = async () => {
+                    try {
+                        const [resH, resA] = await Promise.all([fetch('/api/data'), fetch('/api/air')]);
+                        if (resH.ok) hydroData.value = await resH.json();
+                        if (resA.ok) airData.value = await resA.json();
+
+                        const d = new Date();
+                        lastUpdateText.value = "Actualizado: " + d.toLocaleTimeString();
+                        connected.value = true;
+                    } catch (e) {
+                        lastUpdateText.value = "Error de Conexión";
+                        connected.value = false;
+                    }
+                };
+
+                onMounted(() => {
+                    fetchData();
+                    setInterval(fetchData, 2000);
+                });
+
+                // Logic Contenedores
+                const filteredContainers = computed(() => {
+                    let data = [...hydroData.value].sort((a, b) => {
+                        return (parseInt(a.ip_address.split('.')[2]) || 0) - (parseInt(b.ip_address.split('.')[2]) || 0);
+                    });
+                    if (searchHydro.value) {
+                        const q = searchHydro.value.toLowerCase();
+                        data = data.filter(c => c.ip_address.includes(q) || (c.online ? 'live' : 'off').includes(q));
+                    }
+                    return data;
+                });
+
+                // Logic Warehouses
+                const filteredWarehouses = computed(() => {
+                    if (!airData.value.length) return [];
+                    const racksMap = {};
+                    airData.value.forEach(m => {
+                        const key = `${m.wh}-${m.rack}`;
+                        if (!racksMap[key]) racksMap[key] = { id: key, whName: m.wh, num: m.rack, miners: [], sampleIp: m.ip };
+                        racksMap[key].miners.push(m);
+                    });
+
+                    let racks = Object.values(racksMap).map(r => {
+                        const total = r.miners.length;
+                        const on = r.miners.filter(m => m.online).length;
+                        const hashSum = r.miners.reduce((acc, m) => acc + (m.hashrate || 0), 0);
+                        let tSum = 0, tCnt = 0;
+                        r.miners.forEach(m => { if (m.online && m.temp_chip > 0) { tSum += m.temp_chip; tCnt++; } });
+
+                        return {
+                            id: r.id, whName: r.whName, num: r.num, sampleIp: r.sampleIp,
+                            total, on,
+                            hashPH: Math.round(hashSum).toLocaleString(),
+                            avgTemp: tCnt > 0 ? (tSum / tCnt).toFixed(1) : 0,
+                            health: total > 0 ? (on / total) * 100 : 0
+                        };
+                    });
+
+                    racks.sort((a, b) => {
+                        const whA = parseInt(a.whName.replace('WH', '')) || 0;
+                        const whB = parseInt(b.whName.replace('WH', '')) || 0;
+                        if (whA !== whB) return whA - whB;
+                        return a.num - b.num;
+                    });
+
+                    if (searchAir.value) {
+                        const q = searchAir.value.toLowerCase();
+                        racks = racks.filter(r => r.whName.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
+                    }
+                    return racks;
+                });
+
+                // TOOLTIP LOGIC
+                const showTooltip = (e, item, type) => {
+                    const el = tooltipEl.value;
+                    el.style.display = 'block';
+                    el.style.top = (e.clientY + 15) + 'px';
+                    el.style.left = (e.clientX + 15) + 'px';
+
+                    if (type === 'hydro') {
+                        ttData.value = {
+                            title: `CONTENEDOR ${item.ip_address.split('.')[2]}`,
+                            rows: {
+                                'IP': item.ip_address,
+                                'Estado': item.online ? 'Online' : 'Offline',
+                                'Mineros': `${item.miner_num} / ${item.total_expected}`,
+                                'Hashrate': `${item.total_hashrate_ph} PH`,
+                                'Presión In': `${item.supply_liquid_pressure} bar`
+                            }
+                        };
+                    } else {
+                        ttData.value = {
+                            title: `${item.whName} - RACK ${item.num}`,
+                            rows: {
+                                'Salud': `${Math.round(item.health)}%`,
+                                'Online': `${item.on} / 180`,
+                                'Hash Total': `${item.hashPH} TH`,
+                                'Temp Avg': `${item.avgTemp} °C`
+                            }
+                        };
+                    }
+                };
+                const hideTooltip = () => { if (tooltipEl.value) tooltipEl.value.style.display = 'none'; };
+
+                const hasAlerts = (c) => c.leakage_fault || c.temp_fault || c.liquid_level_low;
+                const extractSubnet = (ip) => ip ? ip.split('.').slice(0, 3).join('.') : '';
+
+                return {
+                    currentTab, searchHydro, searchAir,
+                    filteredContainers, filteredWarehouses,
+                    hasAlerts, extractSubnet, lastUpdateText, connected,
+                    tooltipEl, ttData, showTooltip, hideTooltip
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
