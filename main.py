@@ -271,11 +271,8 @@ async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name:
                 data = await r.json()
                 stats = data.get('STATS', [{}])[0]
                 
-                # Extraer todas las temperaturas de los chips de todas las cadenas
-                temps = []
-                for chain in stats.get('chain', []):
-                    temps.extend(chain.get('temp_chip', []))
-                max_temp = max(temps) if temps else 0
+                # Leer temperatura ambiente (ambient_temp)
+                ambient_temp = float(stats.get('ambient_temp', 0))
                 
                 # IMPORTANTE: rate_5s viene en GH/s, convertir a TH/s
                 hashrate_ghs = float(stats.get('rate_5s', 0))
@@ -285,13 +282,15 @@ async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name:
                     'online': True, 
                     'hashrate_th': hashrate_ths,  # Ahora en TH/s
                     'power_w': int(stats.get('watt', 0)), 
-                    'temp_chip': int(max_temp),
+                    'temp_chip': int(ambient_temp),  # Temperatura ambiente
                     'elapsed': int(stats.get('elapsed', 0)), 
                     'model': 'Antminer', 
                     'last_updated': time.time()
                 })
             else: record_failure(ip)
-    except Exception: record_failure(ip)
+    except Exception as e:
+        logger.debug(f"Error fetching Antminer {ip}: {e}")
+        record_failure(ip)
     
     update_metrics(time.time() - start, success)
     return result
