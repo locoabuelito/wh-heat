@@ -1278,6 +1278,10 @@
                 <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp
                     }}°C</span>
             </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Temp Amb:</span>
+                <span style="font-weight:bold; color: #8b949e;">{{ tooltip.ambient }}°C</span>
+            </div>
             <div
                 style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; border-top:1px solid #30363d; padding-top:4px;">
                 <span style="color:#7ee787">ON: {{ tooltip.on }}</span>
@@ -1326,6 +1330,7 @@
                         title: '',
                         pct: 0,
                         temp: 0,
+                        ambient: 0,
                         on: 0,
                         off: 0,
                         healthColor: '',
@@ -1458,7 +1463,7 @@
                         // Rack initialization
                         if (!whMap[whName].racks[rackNum]) {
                             whMap[whName].racks[rackNum] = {
-                                online: 0, total: 0, tempChip: [], lastUpdated: 0
+                                online: 0, total: 0, tempChip: [], lastUpdated: 0, tempAmbient: [], lastUpdated: 0
                             };
                         }
 
@@ -1469,8 +1474,11 @@
                             rack.online++;
                             whMap[whName].onlineMiners++;
                             whMap[whName].totalHashrate += miner.hashrate;
-                            if (miner.temp_chip !== undefined && miner.temp_chip !== null) {
+                            if (miner.temp_chip !== undefined) {
                                 rack.tempChip.push(miner.temp_chip);
+                            }
+                            if (miner.temp_ambient !== undefined && miner.temp_ambient !== null) {
+                                rack.tempAmbient.push(miner.temp_ambient);
                             }
                         }
                         if (miner.updated > rack.lastUpdated) rack.lastUpdated = miner.updated;
@@ -1629,6 +1637,7 @@
                         title: `${whName} - RACK ${rackNum}`,
                         pct: pct,
                         temp: temp,
+                        ambient: ambTemp,
                         on: rackData.online,
                         off: rackData.total - rackData.online,
                         status: status,

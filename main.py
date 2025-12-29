@@ -148,9 +148,12 @@ def update_metrics(latency: float, success: bool):
 def extract_safe_json(text: str) -> Optional[Dict]:
     """Limpia JSONs sucios."""
     try:
-        match = re.search(r'(\{.*\})', text, re.DOTALL)
-        if match: return json.loads(match.group(1))
-    except json.JSONDecodeError: pass
+        # El ? después del asterisco hace que se detenga en el primer cierre de llave }
+        match = re.search(r'(\{.*?\})', text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+    except Exception as e:
+        logger.debug(f"Error parsing specific JSON: {e}")
     return None
 
 # --- 6. CIRCUIT BREAKER ---
@@ -227,73 +230,73 @@ async def fetch_container_data(session: aiohttp.ClientSession, ip: str, node: Di
     return node
 
 async def fetch_avalon_miner(session: aiohttp.ClientSession, ip: str, wh_name: str, rack_name: str) -> Dict:
-    """Lee datos de Avalon."""
-    if is_circuit_open(ip): return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
+    if is_circuit_open(ip): 
+        return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
     
     start = time.time()
     success = False
-    result = {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'updated': time.time(), 'last_updated': time.time()}
+    # Estructura base del resultado
+    result = {
+        'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 
+        'online': False, 'hashrate_th': 0, 'power_w': 0, 
+        'temp_chip': 0, 'updated': time.time(), 'last_updated': time.time()
+    }
     
     try:
         auth = aiohttp.BasicAuth('root', 'root')
-        async with session.get(f"http://{ip}/get_home.cgi", auth=auth, timeout=2.0) as r:
+        async with session.get(f"http://{ip}/get_home.cgi", auth=auth, timeout=3.0) as r:
             if r.status == 200:
                 data = extract_safe_json(await r.text())
-                if data:
+                if data and 'av' in data:
                     record_success(ip)
-                    success = True
+                    val_temp = int(data.get('temperature', 0)) # <--- Capturamos el valor
                     result.update({
-                        'online': True, 'hashrate_th': float(data.get('av', 0)), 
-                        'power_w': int(data.get('wall_power', 0)), 'temp_chip': int(data.get('temperature', 0)),
-                        'elapsed': int(data.get('elapsed', 0)), 'model': 'Avalon', 'last_updated': time.time()
+                        'online': True, 
+                        'hashrate_th': float(data.get('av', 0)), 
+                        'power_w': int(data.get('wall_power', 0)), 
+                        'temp_chip': val_temp,      # Para colores de rack y tablas
+                        'temp_ambient': val_temp,   # <--- AHORA YA NO SERÁ NULL
+                        'model': 'Avalon', 
+                        'last_updated': time.time()
                     })
                 else: record_failure(ip)
             else: record_failure(ip)
-    except Exception: record_failure(ip)
+    except Exception:
+        record_failure(ip)
     
     update_metrics(time.time() - start, success)
     return result
 
 async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name: str, rack_name: str) -> Dict:
-    if is_circuit_open(ip): return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
+    if is_circuit_open(ip): 
+        return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
     
     start = time.time()
     success = False
-    result = {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'updated': time.time(), 'last_updated': time.time()}
+    result = {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'temp_ambient': 0, 'updated': time.time(), 'last_updated': time.time()}
     
     try:
         auth = aiohttp.BasicAuth('root', 'root')
-        # Aumentamos el timeout a 5s porque los S21+ tardan en responder el JSON grande
         async with session.get(f"http://{ip}/cgi-bin/stats.cgi", auth=auth, timeout=5.0) as r:
             if r.status == 200:
-                text_data = await r.text()
-                data = extract_safe_json(text_data)
-                
-                if data and 'STATS' in data:
-                    # El S21+ a veces pone los datos en el STATS[0] o STATS[1]
-                    stats = data['STATS'][0] if len(data['STATS']) > 0 else {}
-                    
-                    # FALLBACK DE TEMPERATURA: Intentar varias llaves comunes
-                    temp_raw = stats.get('ambient_temp') or stats.get('temp_pcb') or stats.get('temp2') or 0
-                    
-                    # Limpieza de Hashrate
-                    hashrate_ghs = float(stats.get('rate_5s') or stats.get('rate_avg') or 0)
+                data = extract_safe_json(await r.text())
+                if data and 'STATS' in data and len(data['STATS']) > 0:
+                    s_obj = data['STATS'][0]
+                    ambient = float(s_obj.get('ambient_temp', 0)) # <--- Valor del S21+
                     
                     record_success(ip)
-                    success = True
                     result.update({
                         'online': True, 
-                        'hashrate_th': hashrate_ghs / 1000,
-                        'power_w': int(float(stats.get('watt', 0))), 
-                        'temp_chip': float(temp_raw), 
-                        'model': stats.get('type', 'Antminer'),
+                        'hashrate_th': round(float(s_obj.get('rate_5s', 0)) / 1000, 2),
+                        'temp_chip': ambient, 
+                        'temp_ambient': ambient, # <--- SE ASEGURA EL VALOR AQUÍ
+                        'model': data.get('INFO', {}).get('type', 'Antminer S21+'),
                         'last_updated': time.time()
                     })
                 else: record_failure(ip)
             else: record_failure(ip)
     except Exception as e:
-        # CAMBIO: Usamos repr(e) para que veas el error real en el log (Timeout, ConnectionRefused, etc)
-        logger.error(f"Error en IP {ip}: {repr(e)}")
+        # Silenciamos el error en consola para no ensuciar el log, o lo dejamos como debug
         record_failure(ip)
     
     update_metrics(time.time() - start, success)
@@ -497,7 +500,6 @@ async def get_containers(): return list(cache_data["containers"].values())
 
 @app.get("/api/air")
 async def get_air():
-    """Devuelve datos planos para el Frontend."""
     data = []
     for wh_name, wh_conf in WAREHOUSE_CONFIG.items():
         for r_name, r_conf in wh_conf["racks"].items():
@@ -505,10 +507,14 @@ async def get_air():
             miners = cache_data["wh_miners"].get(r_key, [])
             for m in miners:
                 data.append({
-                    "wh": wh_name, "rack": r_conf["rack_number"],
-                    "ip": m.get('ip'), "online": m.get('online'),
-                    "hashrate": m.get('hashrate_th'), "temp_chip": m.get('temp_chip'),
-                    "updated": m.get('updated'), "elapsed": m.get('elapsed')
+                    "wh": wh_name, 
+                    "rack": r_conf["rack_number"],
+                    "ip": m.get('ip'), 
+                    "online": m.get('online'),
+                    "hashrate": m.get('hashrate_th', 0), 
+                    "temp_chip": m.get('temp_chip', 0),
+                    "temp_ambient": m.get('temp_ambient', 0), # <--- .get(key, default)
+                    "updated": m.get('updated', 0)
                 })
     return data
 
