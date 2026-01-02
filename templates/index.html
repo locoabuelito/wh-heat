@@ -1613,7 +1613,7 @@
                     let alerts = [];
                     if (r.leakage_fault) alerts.push({ txt: '⚠️ FUGA', cls: 'sp-crit' });
                     if (r.temp_fault) alerts.push({ txt: '🔥 TEMP', cls: 'sp-crit' });
-                    if (r.supply_liquid_temp > 40) alerts.push({ txt: '🌡️ TEMP SUP', cls: 'sp-crit' });
+                    if (r.supply_liquid_temp > 38) alerts.push({ txt: '🌡️ TEMP SUP', cls: 'sp-crit' });
                     if (r.liquid_level_low) alerts.push({ txt: 'NIVEL TANQUE', cls: 'sp-crit' });
                     if (r.supply_liquid_pressure_high) alerts.push({ txt: 'PRES. ALTA', cls: 'sp-crit' });
                     if (r.supply_liquid_flow_low) alerts.push({ txt: 'FLUJO BAJO', cls: 'sp-crit' });
