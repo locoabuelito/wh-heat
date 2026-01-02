@@ -336,7 +336,7 @@
         }
 
         .modal-panel {
-            width: 350px;
+            width: 420px;
             max-height: 80vh;
             background: #161b22;
             border: 1px solid #30363d;
@@ -792,6 +792,17 @@
             text-align: right;
         }
 
+        /* Temperature States */
+        .temp-critical {
+            background: rgba(248, 81, 73, 0.2) !important;
+            border-left: 3px solid #f85149 !important;
+        }
+
+        .temp-warning {
+            background: rgba(210, 153, 34, 0.15) !important;
+            border-left: 3px solid #d29922 !important;
+        }
+
         /* RESPONSIVE GRID WAREHOUSES */
         @media (max-width: 1850px) {
             .wh-container {
@@ -863,7 +874,7 @@
                 <div class="stat-card">
                     <h4>⚠️ Alertas Visuales</h4>
                     <div class="stat-content">
-                        • <b>Fila Roja:</b> Falla Crítica (Fuga, Temp, Nivel, Presión).<br>
+                        • <b>Fila Roja:</b> Falla Crítica (Fuga, Temp, Temp Suministro >40°C, Nivel, Presión).<br>
                         • <b>Fila Amarilla:</b> Faltan mineros esperados.<br>
                         • <b>Energía:</b> B1 (Azul) / B2 (Violeta).
                     </div>
@@ -1015,6 +1026,29 @@
                 </div>
             </div>
 
+            <!-- GLOSARIO DE ALERTAS -->
+            <div
+                style="background:var(--bg-card); border:1px solid var(--border); padding:15px; border-radius:8px; margin-bottom:20px; font-size:12px; color:var(--text-sub);">
+                <div style="font-weight:700; color:white; margin-bottom:5px; text-transform:uppercase;">ℹ️ Cómo
+                    funcionan las Alertas Térmicas</div>
+                <div>
+                    El sistema utiliza un algoritmo inteligente para el color de los racks. El número mostrado es
+                    siempre el <b>Promedio</b> (referencia general), pero el color alerta sobre <b>Puntos Calientes</b>
+                    significativos.
+                    <ul>
+                        <li><span style="color:#f85149; font-weight:bold;">ROJO (Crítico)</span>: Se detectó un grupo de
+                            mineros (> 5%, aprox 9 equipos) operando por encima de <b>38°C</b>, aunque el promedio del
+                            rack sea bajo.
+                        </li>
+                        <li><span style="color:#d29922; font-weight:bold;">NARANJA (Advertencia)</span>: Grupo
+                            significativo operando por encima de <b>36°C</b>.</li>
+                        <li><span style="color:#3fb950; font-weight:bold;">VERDE (Normal)</span>: Todo el rack opera de
+                            forma segura. Se ignoran picos aislados (menos del 5%, aprox 9 equipos) para evitar falsas
+                            alarmas por sensores defectuosos.</li>
+                    </ul>
+                </div>
+            </div>
+
             <div v-if="loadingWh" class="loading">
                 <div class="spinner"></div>
                 <p>Cargando datos de warehouses...</p>
@@ -1033,35 +1067,18 @@
                     </div>
                     <div class="wc-hash">{{ (wh.totalHashrate / 1000).toFixed(1) }} PH</div>
 
-                    <div class="wc-details">
-                        <div class="wc-metric">
-                            <span class="wc-lbl">MAQUINAS</span>
-                            <span class="wc-val">
-                                <span style="color:#7ee787">{{ wh.onlineMiners }}</span>
-                                /
-                                <span style="color:#f85149">{{ wh.totalMiners -
-                                    wh.onlineMiners }}</span>
-                            </span>
-                        </div>
-                        <div class="wc-metric text-right">
-                            <span class="wc-lbl">ESTADO</span>
-                            <span class="wc-val">
-                                <span :style="{color: getHealthColor(wh.health)}">{{
-                                    wh.health }}%</span>
-                                <span style="color:#8b949e; margin-left:5px">({{
-                                    wh.avgTemp }}°C)</span>
-                            </span>
-                        </div>
-                    </div>
+                    <!-- Detalles eliminados por solicitud -->
 
                     <div class="racks-grid">
                         <div v-for="r in 16" :key="r" class="rack-box" :class="getRackClass(wh.racks[r])"
-                            @mouseenter="showTooltip($event, wh.name, r, wh.racks[r])" @mouseleave="hideTooltip">
+                            @click="openHotMinersModal(wh.name, r)"
+                            @mouseenter="showTooltip($event, wh.name, r, wh.racks[r])" @mouseleave="hideTooltip"
+                            style="cursor: pointer;">
 
                             <span class="rb-title">R{{ r }}</span>
                             <template v-if="wh.racks[r] && wh.racks[r].total > 0">
                                 <span class="rb-temp">{{
-                                    getAvgTemp(wh.racks[r].tempChip) }}°</span>
+                                    wh.racks[r].avgTemp || 0 }}°</span>
                                 <span class="rb-sync">{{
                                     formatTime(wh.racks[r].lastUpdated) }}</span>
                             </template>
@@ -1236,22 +1253,64 @@
                     <span class="dp-title" v-html="modalTitle"></span>
                     <span class="dp-close" @click="closeModal">&times;</span>
                 </div>
-                <div class="m-list-header">
+                <div class="m-list-header"
+                    :style="modalContext === 'warehouse' ? 'grid-template-columns: 60px 140px 60px 70px;' : 'grid-template-columns: 120px 60px 70px 85px;'">
+                    <span v-if="modalContext === 'warehouse'">Rack</span>
                     <span>IP</span>
                     <span>Temp</span>
                     <span>Hash</span>
-                    <span style="text-align:right">Tiempo Activo</span>
+                    <span v-if="modalContext === 'container'" style="text-align:right">Tiempo Activo</span>
                 </div>
                 <div class="dp-body">
                     <div v-if="selectedMiners.length === 0" style="padding:20px; text-align:center; color:#8b949e">
                         No hay mineros en esta categoría
                     </div>
                     <div v-for="m in selectedMiners" :key="m.ip" class="m-list-row"
-                        :class="m.hashrate <= 0 ? 'is-off' : 'is-on'">
-                        <span class="c-ip">.{{ m.ip.split('.').pop() }}</span>
+                        :class="m.hashrate <= 0 ? 'is-off' : 'is-on'"
+                        :style="modalContext === 'warehouse' ? 'grid-template-columns: 60px 140px 60px 70px;' : 'grid-template-columns: 120px 60px 70px 85px;'">
+                        <span v-if="modalContext === 'warehouse'" class="c-rack" style="font-weight: 700;">{{ m.rack
+                            }}</span>
+                        <span class="c-ip" style="font-size: 10px;">{{ m.ip }}</span>
                         <span class="c-temp">{{ m.temp > 0 ? m.temp + '°C' : '--' }}</span>
                         <span class="c-hash">{{ parseFloat(m.hashrate).toFixed(0) }} T</span>
-                        <span class="c-time" style="text-align:right">{{ formatElapsed(m.elapsed) }}</span>
+                        <span v-if="modalContext === 'container'" class="c-time" style="text-align:right">{{
+                            formatElapsed(m.elapsed) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- High Temperature Miners Modal -->
+        <div v-if="showHotMinersModal" class="modal-overlay" @click="closeHotMinersModal">
+            <div class="modal-panel" @click.stop style="width: 650px;">
+                <div class="dp-header">
+                    <div class="dp-title">
+                        🌡️ {{ hotMinersModal.warehouse }} - {{ hotMinersModal.rack }} - TEMPERATURA ALTA
+                    </div>
+                    <span class="dp-close" @click="closeHotMinersModal">&times;</span>
+                </div>
+
+                <div class="m-list-header" style="grid-template-columns: 140px 80px 100px 120px;">
+                    <div>IP</div>
+                    <div>Temp (°C)</div>
+                    <div>Hash (TH/s)</div>
+                    <div>Estado</div>
+                </div>
+
+                <div class="dp-body">
+                    <div v-if="hotMiners.length === 0" style="padding:20px; text-align:center; color:#8b949e">
+                        ✅ No hay mineros con temperatura > 35°C
+                    </div>
+                    <div v-for="miner in hotMiners" :key="miner.ip" class="m-list-row"
+                        :class="{'temp-critical': miner.temp_chip > 37.5, 'temp-warning': miner.temp_chip > 35 && miner.temp_chip <= 37.5}"
+                        style="grid-template-columns: 140px 80px 100px 120px;">
+                        <div style="font-weight: 700;">{{ miner.ip }}</div>
+                        <div style="font-weight: 800;">{{ miner.temp_chip }}°</div>
+                        <div>{{ (miner.hashrate_th || 0).toFixed(2) }}</div>
+                        <div>
+                            <span v-if="miner.temp_chip > 37.5" style="color: #f85149;">🔥 CRÍTICO</span>
+                            <span v-else style="color: #d29922;">⚠️ ALTO</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1276,6 +1335,13 @@
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                 <span>Temp Avg:</span>
                 <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp
+                    }}°C</span>
+            </div>
+            <!-- P95 Restaurado -->
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Temp P95:</span>
+                <span style="font-weight:bold;" :style="{color: tooltip.p95Temp >= 36 ? '#d29922' : '#7ee787'}">{{
+                    tooltip.p95Temp || 0
                     }}°C</span>
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -1320,7 +1386,14 @@
                     // Modal
                     modalOpen: false,
                     modalTitle: '',
+                    modalContext: 'container', // 'container' o 'warehouse'
                     selectedMiners: [],
+                    selectedWarehouse: null,
+
+                    // High Temperature Modal
+                    showHotMinersModal: false,
+                    hotMinersModal: { warehouse: '', rack: '', rackNumber: 0 },
+                    airData: [], // Datos de /api/air
 
                     // Tooltip
                     tooltip: {
@@ -1330,6 +1403,8 @@
                         title: '',
                         pct: 0,
                         temp: 0,
+                        p95Temp: 0,
+                        p95Power: 0,
                         ambient: 0,
                         on: 0,
                         off: 0,
@@ -1382,6 +1457,14 @@
                         const numB = parseInt(b.name.replace('WH', '')) || 0;
                         return numA - numB;
                     });
+                },
+                hotMiners() {
+                    const { warehouse, rackNumber } = this.hotMinersModal;
+                    if (!warehouse || !this.airData || this.airData.length === 0) return [];
+
+                    return this.airData
+                        .filter(m => m.wh === warehouse && m.rack === rackNumber && (m.temp_chip || 0) > 35)
+                        .sort((a, b) => (b.temp_chip || 0) - (a.temp_chip || 0)); // Highest temp first
                 }
             },
             methods: {
@@ -1416,6 +1499,7 @@
                         const res = await fetch('/api/air');
                         if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         const data = await res.json();
+                        this.airData = data; // Guardar para el modal
                         this.processWarehouseData(data);
                     } catch (e) {
                         console.error("Error warehouses", e);
@@ -1451,14 +1535,30 @@
                                 racks: {},
                                 totalMiners: 0,
                                 onlineMiners: 0,
+                                miningMiners: 0,  // ← Nuevo
+                                idleMiners: 0,     // ← Nuevo
+                                offlineMiners: 0,  // ← Nuevo
                                 totalHashrate: 0,
                                 lastUpdated: 0,
                                 avgTemp: 0
                             };
                         }
 
-                        // Global counters
-                        if (miner.online) { gOn++; gHash += miner.hashrate; } else { gOff++; }
+                        // Contar por estado
+                        const status = miner.status || 'offline';
+                        if (status === 'mining') {
+                            whMap[whName].miningMiners++;
+                            whMap[whName].onlineMiners++;
+                            gOn++;
+                            gHash += miner.hashrate;
+                        } else if (status === 'idle') {
+                            whMap[whName].idleMiners++;
+                            whMap[whName].onlineMiners++;
+                            gOn++;
+                        } else {
+                            whMap[whName].offlineMiners++;
+                            gOff++;
+                        }
 
                         // Rack initialization
                         if (!whMap[whName].racks[rackNum]) {
@@ -1470,9 +1570,8 @@
                         // Update Rack
                         const rack = whMap[whName].racks[rackNum];
                         rack.total++;
-                        if (miner.online) {
+                        if (miner.online || status !== 'offline') {
                             rack.online++;
-                            whMap[whName].onlineMiners++;
                             whMap[whName].totalHashrate += miner.hashrate;
                             if (miner.temp_chip !== undefined) {
                                 rack.tempChip.push(miner.temp_chip);
@@ -1486,11 +1585,18 @@
                         whMap[whName].totalMiners++;
                     });
 
-                    // Calcular Avg Temp Warehouse
+                    // Calcular Avg Temp Warehouse y P95 por Rack
                     Object.values(whMap).forEach(wh => {
                         let temps = [];
-                        Object.values(wh.racks).forEach(r => temps.push(...r.tempChip));
-                        wh.avgTemp = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : 0;
+                        Object.values(wh.racks).forEach(r => {
+                            temps.push(...r.tempChip);
+                            // Calcular P95 para Alertas (Ignora el 5% superior, aprox 9 mineros de 180)
+                            // Protege contra "glitches" de sensores pero alerta si hay un grupo real caliente
+                            r.pAlertTemp = r.tempChip.length > 0 ? this.calculatePercentile(r.tempChip, 95) : 0;
+                            // Calcular Avg para display
+                            r.avgTemp = r.tempChip.length > 0 ? Number((r.tempChip.reduce((a, b) => a + b, 0) / r.tempChip.length).toFixed(1)) : 0;
+                        });
+                        wh.avgTemp = temps.length ? Number((temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)) : 0;
                         wh.health = wh.totalMiners > 0 ? Math.round((wh.onlineMiners / wh.totalMiners) * 100) : 0;
                     });
 
@@ -1507,6 +1613,7 @@
                     let alerts = [];
                     if (r.leakage_fault) alerts.push({ txt: '⚠️ FUGA', cls: 'sp-crit' });
                     if (r.temp_fault) alerts.push({ txt: '🔥 TEMP', cls: 'sp-crit' });
+                    if (r.supply_liquid_temp > 40) alerts.push({ txt: '🌡️ TEMP SUP', cls: 'sp-crit' });
                     if (r.liquid_level_low) alerts.push({ txt: 'NIVEL TANQUE', cls: 'sp-crit' });
                     if (r.supply_liquid_pressure_high) alerts.push({ txt: 'PRES. ALTA', cls: 'sp-crit' });
                     if (r.supply_liquid_flow_low) alerts.push({ txt: 'FLUJO BAJO', cls: 'sp-crit' });
@@ -1571,14 +1678,16 @@
                 // --- HELPERS VISUALES WAREHOUSES ---
                 isWhLive(ts) { return (Math.floor(Date.now() / 1000) - ts) < 60; },
                 getHealthColor(pct) { return pct > 95 ? '#3fb950' : (pct > 80 ? '#d29922' : '#f85149'); },
-                getAvgTemp(temps) { return temps && temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : 0; },
+                getAvgTemp(temps) { return temps && temps.length ? Number((temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)) : 0; },
                 getRackClass(rack) {
                     if (!rack || rack.total === 0) return 'rb-off';
-                    const temp = this.getAvgTemp(rack.tempChip);
-                    const health = (rack.online / rack.total) * 100;
+                    if (rack.online === 0) return 'rb-off'; // Sin mineros online = OFFLINE
 
-                    if (health < 75 || temp >= 40) return 'rb-crit';
-                    if (health < 90 || temp >= 36) return 'rb-warn';
+                    // Usar P95 para el color (Detecta si hay >9 mineros calientes)
+                    const temp = rack.pAlertTemp || this.getAvgTemp(rack.tempChip);
+
+                    if (temp >= 38) return 'rb-crit';
+                    if (temp >= 36) return 'rb-warn';
                     return 'rb-ok';
                 },
 
@@ -1604,9 +1713,82 @@
                     const color = type === 'online' ? '#3fb950' : '#f85149';
                     const label = type === 'online' ? 'ONLINE' : 'OFFLINE';
                     this.modalTitle = `Mineros <span style="color:${color}">${label}</span> en ${ip} (${this.selectedMiners.length})`;
+                    this.modalContext = 'container';
                     this.modalOpen = true;
                 },
-                closeModal() { this.modalOpen = false; },
+                async openWarehouseModal(whName, type) {
+                    this.modalContext = 'warehouse';
+                    this.selectedWarehouse = whName;
+
+                    try {
+                        // Fetch fresh data
+                        const res = await fetch('/api/air');
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const data = await res.json();
+
+                        // Filter miners for this warehouse
+                        const whMiners = data.filter(m => m.wh === whName);
+
+                        // Filter by status (mining/idle/offline)
+                        let filtered = whMiners.filter(m => (m.status || 'offline') === type);
+
+                        // Transform to modal format
+                        this.selectedMiners = filtered.map(m => ({
+                            ip: m.ip,
+                            hashrate: m.hashrate || 0,
+                            temp: m.temp_chip || 0,
+                            elapsed: 0,
+                            rack: `R${m.rack}`,
+                            status: m.status || 'offline',
+                            status_reason: m.status_reason || 'unknown'
+                        }));
+
+                        // Sort by rack first, then by IP
+                        this.selectedMiners.sort((a, b) => {
+                            const rackA = parseInt(a.rack.substring(1));
+                            const rackB = parseInt(b.rack.substring(1));
+                            if (rackA !== rackB) return rackA - rackB;
+                            return a.ip.localeCompare(b.ip, undefined, { numeric: true });
+                        });
+
+                        // Color y label según tipo
+                        const colors = {
+                            'mining': '#7ee787',
+                            'idle': '#d29922',
+                            'offline': '#f85149'
+                        };
+                        const labels = {
+                            'mining': 'MINING',
+                            'idle': 'IDLE',
+                            'offline': 'OFFLINE'
+                        };
+
+                        const color = colors[type] || '#f85149';
+                        const label = labels[type] || 'UNKNOWN';
+                        this.modalTitle = `${whName} - Mineros <span style="color:${color}">${label}</span> (${this.selectedMiners.length})`;
+                        this.modalOpen = true;
+                    } catch (e) {
+                        console.error('Error fetching warehouse data:', e);
+                    }
+                },
+                closeModal() {
+                    this.modalOpen = false;
+                    this.modalContext = 'container';
+                    this.selectedWarehouse = null;
+                },
+
+                // --- HIGH TEMPERATURE MODAL ---
+                openHotMinersModal(whName, rackNumber) {
+                    this.hotMinersModal = {
+                        warehouse: whName,
+                        rack: `Rack${rackNumber}`,
+                        rackNumber: rackNumber
+                    };
+                    this.showHotMinersModal = true;
+                },
+                closeHotMinersModal() {
+                    this.showHotMinersModal = false;
+                },
 
                 // --- TOOLTIP LOGIC ---
                 showTooltip(e, whName, rackNum, rackData) {
@@ -1614,6 +1796,7 @@
 
                     const rect = e.target.getBoundingClientRect();
                     const temp = this.getAvgTemp(rackData.tempChip);
+                    const ambTemp = this.getAvgTemp(rackData.tempAmbient || []);
                     const pct = Math.round((rackData.online / rackData.total) * 100);
 
                     // ← MEJORA #5: Indicador de estado de procesamiento
@@ -1637,6 +1820,7 @@
                         title: `${whName} - RACK ${rackNum}`,
                         pct: pct,
                         temp: temp,
+                        p95Temp: rackData.pAlertTemp || 0, // Restaurado para tooltip
                         ambient: ambTemp,
                         on: rackData.online,
                         off: rackData.total - rackData.online,
@@ -1655,6 +1839,14 @@
                     });
                 },
                 hideTooltip() { this.tooltip.visible = false; },
+
+                // --- HELPER: Calculate Percentile ---
+                calculatePercentile(values, percentile) {
+                    if (!values || values.length === 0) return 0;
+                    const sorted = [...values].sort((a, b) => a - b);
+                    const index = Math.floor(sorted.length * (percentile / 100));
+                    return Math.round(sorted[Math.min(index, sorted.length - 1)] * 10) / 10;
+                },
 
                 // --- UTILS ---
                 formatTime(ts) {

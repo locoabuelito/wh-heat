@@ -1,5 +1,5 @@
 import asyncio  # Librería base para manejar concurrencia y tareas asíncronas.
-import aiohttp  # Cliente HTTP asíncrono de alto rendimiento.
+import aiohttp   # Cliente HTTP asíncrono de alto rendimiento.
 import json     # Para codificar y decodificar datos en formato JSON.
 import time     # Para medir tiempos, calcular latencias y obtener timestamps.
 import logging  # Para generar registros (logs) ordenados en la consola.
@@ -14,6 +14,11 @@ from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+import requests
+from requests.auth import HTTPDigestAuth
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
 
 # --- 1. CONFIGURACIÓN DEL SISTEMA DE LOGS ---
 logging.basicConfig(
@@ -45,6 +50,16 @@ def load_config():
     return defaults
 
 CONFIG = load_config()
+THREAD_POOL = ThreadPoolExecutor(max_workers=200)
+
+sync_session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=200,  # Permitir 400 conexiones simultáneas
+    pool_maxsize=200,      # Tamaño máximo del pool
+    max_retries=0          # Cero reintentos (si falla, falla rápido)
+)
+sync_session.mount("http://", adapter)
+sync_session.mount("https://", adapter)
 
 # Constantes Globales
 MAX_CONCURRENT_RACKS = CONFIG["concurrency"]["max_racks"]
@@ -124,7 +139,7 @@ def init_cache():
         cache_data["warehouses"][wh_name] = {
             "name": wh_name, "type": wh_config["type"], "total_racks": len(wh_config["racks"]), 
             "online_racks": 0, "total_miners": 0, "online_miners": 0,
-            "total_hashrate_th": 0.0, "total_power_w": 0, "avg_temp": 0, "last_updated": 0
+            "total_hashrate_th": 0.0, "total_power_w": 0, "avg_temp": 0, "p95_temp": 0, "last_updated": 0
         }
         for rack_name, rack_config in wh_config["racks"].items():
             base_ip = rack_config["base_ip"]
@@ -133,7 +148,7 @@ def init_cache():
                 "warehouse": wh_name, "name": rack_name, "rack_number": rack_config["rack_number"], 
                 "base_ip": base_ip, "type": rack_config["type"], "total_miners": rack_config["range"],
                 "online_miners": 0, "offline_miners": 0, "total_hashrate_th": 0.0, "total_power_w": 0,
-                "avg_temp": 0, "last_updated": 0
+                "avg_temp": 0, "p95_temp": 0, "p95_power": 0, "last_updated": 0
             }
             cache_data["wh_miners"][rack_key] = []
 
@@ -145,17 +160,67 @@ def update_metrics(latency: float, success: bool):
     curr = performance_metrics["avg_latency_ms"]
     performance_metrics["avg_latency_ms"] = (alpha * (latency * 1000)) + ((1 - alpha) * curr)
 
+def calculate_percentile(values: List[float], percentile: int) -> float:
+    """
+    Calcula el percentil especificado de una lista de valores.
+    
+    Args:
+        values: Lista de valores numéricos
+        percentile: Percentil a calcular (ej: 95 para P95)
+    
+    Returns:
+        Valor del percentil redondeado a 1 decimal, 0 si la lista está vacía
+    """
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    index = int(len(sorted_values) * (percentile / 100))
+    return round(sorted_values[min(index, len(sorted_values) - 1)], 1)
+
 def extract_safe_json(text: str) -> Optional[Dict]:
-    """Limpia JSONs sucios."""
     try:
-        # El ? después del asterisco hace que se detenga en el primer cierre de llave }
+        # Busca lo que esté entre llaves de forma no codiciosa
         match = re.search(r'(\{.*?\})', text, re.DOTALL)
         if match:
             return json.loads(match.group(1))
-    except Exception as e:
-        logger.debug(f"Error parsing specific JSON: {e}")
-    return None
+        # Si falla el regex, intentamos el texto completo
+        return json.loads(text)
+    except Exception:
+        return None
 
+def ping_host(ip: str, timeout_ms: int = 100) -> bool:
+    """
+    Ejecuta ping ICMP para verificar conectividad básica.
+    Mucho más rápido y eficiente que HTTP request.
+    
+    Args:
+        ip: IP del host a verificar
+        timeout_ms: Timeout en milisegundos (default 100ms)
+    
+    Returns:
+        True si el host responde a ping, False en caso contrario
+    """
+    try:
+        import subprocess
+        import platform
+        
+        # Windows usa -n, Linux/Mac usan -c
+        param = '-n' if platform.system().lower() == 'windows' else '-c'
+        # Windows usa -w (ms), Linux/Mac usan -W (segundos)
+        timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
+        timeout_value = str(timeout_ms) if platform.system().lower() == 'windows' else str(max(1, timeout_ms // 1000))
+        
+        # Ejecutar ping: 1 paquete, timeout configurado
+        result = subprocess.run(
+            ['ping', param, '1', timeout_param, timeout_value, ip],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1  # Timeout del proceso subprocess
+        )
+        
+        return result.returncode == 0
+    except Exception:
+        return False
 # --- 6. CIRCUIT BREAKER ---
 def enforce_cb_limit():
     if len(circuit_breaker_store) > CB_CONFIG["max_store_size"]:
@@ -231,74 +296,196 @@ async def fetch_container_data(session: aiohttp.ClientSession, ip: str, node: Di
 
 async def fetch_avalon_miner(session: aiohttp.ClientSession, ip: str, wh_name: str, rack_name: str) -> Dict:
     if is_circuit_open(ip): 
-        return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
+        return {
+            'ip': ip, 'warehouse': wh_name, 'rack': rack_name,
+            'online': False, 'status': 'offline', 'status_reason': 'circuit_breaker',
+            'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'temp_ambient': 0,
+            'updated': time.time(), 'last_updated': 0
+        }
     
     start = time.time()
     success = False
+    
     # Estructura base del resultado
     result = {
         'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 
-        'online': False, 'hashrate_th': 0, 'power_w': 0, 
-        'temp_chip': 0, 'updated': time.time(), 'last_updated': time.time()
+        'online': False, 'status': 'offline', 'status_reason': 'unknown',
+        'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'temp_ambient': 0,
+        'model': 'Avalon', 'updated': time.time(), 'last_updated': time.time()
     }
     
+    # MEJORA 1: Pre-check con ICMP ping (200ms para mejor precisión)
+    loop = asyncio.get_running_loop()
+    is_pingable = await loop.run_in_executor(None, ping_host, ip, 200)
+    
+    if not is_pingable:
+        result['status_reason'] = 'no_ping_response'
+        record_failure(ip)
+        update_metrics(time.time() - start, False)
+        return result
+    
+    # Si responde ping, intentar HTTP
     try:
         auth = aiohttp.BasicAuth('root', 'root')
-        async with session.get(f"http://{ip}/get_home.cgi", auth=auth, timeout=3.0) as r:
+        async with session.get(f"http://{ip}/get_home.cgi", auth=auth, timeout=3.5) as r:
             if r.status == 200:
                 data = extract_safe_json(await r.text())
-                if data and 'av' in data:
-                    record_success(ip)
-                    val_temp = int(data.get('temperature', 0)) # <--- Capturamos el valor
-                    result.update({
-                        'online': True, 
-                        'hashrate_th': float(data.get('av', 0)), 
-                        'power_w': int(data.get('wall_power', 0)), 
-                        'temp_chip': val_temp,      # Para colores de rack y tablas
-                        'temp_ambient': val_temp,   # <--- AHORA YA NO SERÁ NULL
-                        'model': 'Avalon', 
-                        'last_updated': time.time()
-                    })
-                else: record_failure(ip)
-            else: record_failure(ip)
-    except Exception:
+                
+                # MEJORA 2: Validación robusta con múltiples checks
+                if data:
+                    # Check 1: Tiene campo 'av' (hashrate)
+                    has_av = 'av' in data
+                    # Check 2: Hashrate > 0
+                    hashrate = float(data.get('av', 0)) if has_av else 0
+                    # Check 3: Sistema funcional
+                    sys_status = data.get('sys_status', '0')
+                    
+                    val_temp = int(data.get('temperature', 0))
+                    val_power = int(data.get('wall_power', 0))
+                    
+                    if has_av and hashrate > 0 and sys_status == '1':
+                        # MEJORA 3: Estado MINING (minando activamente)
+                        record_success(ip)
+                        result.update({
+                            'online': True,
+                            'status': 'mining',
+                            'status_reason': 'ok',
+                            'hashrate_th': hashrate,
+                            'power_w': val_power,
+                            'temp_chip': val_temp,
+                            'temp_ambient': val_temp,
+                            'last_updated': time.time()
+                        })
+                        success = True
+                    elif has_av and sys_status == '1':
+                        # MEJORA 3: Estado IDLE (responde pero hashrate=0)
+                        result.update({
+                            'online': True,
+                            'status': 'idle',
+                            'status_reason': 'no_hashrate',
+                            'hashrate_th': 0,
+                            'power_w': val_power,
+                            'temp_chip': val_temp,
+                            'temp_ambient': val_temp,
+                            'last_updated': time.time()
+                        })
+                        success = True  # No fallar circuit breaker si está idle
+                    else:
+                        # Sistema no funcional o sin datos válidos
+                        result['status'] = 'idle'
+                        result['status_reason'] = 'system_error' if sys_status != '1' else 'invalid_data'
+                        record_failure(ip)
+                else:
+                    result['status_reason'] = 'invalid_json'
+                    record_failure(ip)
+            else:
+                result['status_reason'] = f'http_{r.status}'
+                record_failure(ip)
+    except asyncio.TimeoutError:
+        result['status_reason'] = 'http_timeout'
+        record_failure(ip)
+    except Exception as e:
+        result['status_reason'] = f'error_{type(e).__name__}'
         record_failure(ip)
     
     update_metrics(time.time() - start, success)
     return result
 
+# Función SÍNCRONA (La lógica de app.py que sí funciona)
+def _sync_fetch_s21(ip: str, wh_name: str, rack_name: str):
+    """
+    Función SINCRONA OPTIMIZADA con ICMP pre-check y tres estados.
+    Usa la sesión global con connection pooling.
+    """
+    url = f"http://{ip}/cgi-bin/stats.cgi"
+    result = {
+        'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 
+        'online': False, 'status': 'offline', 'status_reason': 'unknown',
+        'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'temp_ambient': 0, 
+        'model': 'Antminer S21+', 'updated': time.time(), 'last_updated': 0
+    }
+    
+    # MEJORA 1: ICMP ping pre-check (200ms para mejor precisión)
+    if not ping_host(ip, 200):
+        result['status_reason'] = 'no_ping_response'
+        return (False, result)
+
+    try:
+        # Timeout aumentado a 3.5s para reducir falsos negativos
+        resp = sync_session.get(
+            url, 
+            auth=HTTPDigestAuth('root', 'root'), 
+            timeout=3.5
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'STATS' in data and len(data['STATS']) > 0:
+                s_obj = data['STATS'][0]
+                info = data.get('INFO', {})
+                
+                temp = int(float(s_obj.get('ambient_temp', 0)))
+                hash_ths = round(float(s_obj.get('rate_5s', 0)) / 1000, 2)
+                power = int(s_obj.get('watt', 0))
+                
+                # MEJORA 2: Distinguir entre mining e idle
+                if hash_ths > 0:
+                    # Estado MINING: minando activamente
+                    result.update({
+                        'online': True,
+                        'status': 'mining',
+                        'status_reason': 'ok',
+                        'hashrate_th': hash_ths,
+                        'power_w': power,
+                        'temp_chip': temp,
+                        'temp_ambient': temp,
+                        'model': info.get('type', 'Antminer S21+'),
+                        'last_updated': time.time()
+                    })
+                    return (True, result)
+                else:
+                    # Estado IDLE: responde pero no mina
+                    result.update({
+                        'online': True,
+                        'status': 'idle',
+                        'status_reason': 'no_hashrate',
+                        'hashrate_th': 0,
+                        'power_w': power,
+                        'temp_chip': temp,
+                        'temp_ambient': temp,
+                        'model': info.get('type', 'Antminer S21+'),
+                        'last_updated': time.time()
+                    })
+                    return (True, result)  # No penalizar en circuit breaker
+            else:
+                result['status_reason'] = 'invalid_response'
+        else:
+            result['status_reason'] = f'http_{resp.status_code}'
+    except Exception as e:
+        result['status_reason'] = f'error_{type(e).__name__}'
+    
+    return (False, result)
+
+# Función ASÍNCRONA (El puente para FastAPI)
 async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name: str, rack_name: str) -> Dict:
     if is_circuit_open(ip): 
         return {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'updated': time.time(), 'last_updated': 0}
     
     start = time.time()
-    success = False
-    result = {'ip': ip, 'warehouse': wh_name, 'rack': rack_name, 'online': False, 'hashrate_th': 0, 'power_w': 0, 'temp_chip': 0, 'temp_ambient': 0, 'updated': time.time(), 'last_updated': time.time()}
+    loop = asyncio.get_running_loop()
     
-    try:
-        auth = aiohttp.BasicAuth('root', 'root')
-        async with session.get(f"http://{ip}/cgi-bin/stats.cgi", auth=auth, timeout=5.0) as r:
-            if r.status == 200:
-                data = extract_safe_json(await r.text())
-                if data and 'STATS' in data and len(data['STATS']) > 0:
-                    s_obj = data['STATS'][0]
-                    ambient = float(s_obj.get('ambient_temp', 0)) # <--- Valor del S21+
-                    
-                    record_success(ip)
-                    result.update({
-                        'online': True, 
-                        'hashrate_th': round(float(s_obj.get('rate_5s', 0)) / 1000, 2),
-                        'temp_chip': ambient, 
-                        'temp_ambient': ambient, # <--- SE ASEGURA EL VALOR AQUÍ
-                        'model': data.get('INFO', {}).get('type', 'Antminer S21+'),
-                        'last_updated': time.time()
-                    })
-                else: record_failure(ip)
-            else: record_failure(ip)
-    except Exception as e:
-        # Silenciamos el error en consola para no ensuciar el log, o lo dejamos como debug
+    # AQUÍ ESTÁ LA CLAVE DE LA VELOCIDAD:
+    # Le decimos a asyncio: "Usa mi pool gigante de 300 hilos, no el tuyo pequeño"
+    success, result = await loop.run_in_executor(
+        THREAD_POOL, 
+        partial(_sync_fetch_s21, ip, wh_name, rack_name)
+    )
+
+    if success:
+        record_success(ip)
+    else:
         record_failure(ip)
-    
+
     update_metrics(time.time() - start, success)
     return result
 
@@ -342,7 +529,7 @@ async def process_rack_data(session, wh_name, rack_name, rack_config, semaphore)
             base_num = int(ip_parts[-1])
             
             rack_miners = []
-            r_stats = {"online": 0, "offline": 0, "hashrate": 0.0, "power": 0, "temps": [], "last_updated": 0}
+            r_stats = {"online": 0, "offline": 0, "hashrate": 0.0, "power": 0, "temps": [], "powers": [], "last_updated": 0}
             
             # Batch Processing: Procesar en grupos para no saturar el switch
             total_miners = rack_config["range"]
@@ -371,6 +558,7 @@ async def process_rack_data(session, wh_name, rack_name, rack_config, semaphore)
                             r_stats["hashrate"] += res['hashrate_th']
                             r_stats["power"] += res['power_w']
                             if res['temp_chip'] > 0: r_stats["temps"].append(res['temp_chip'])
+                            if res['power_w'] > 0: r_stats["powers"].append(res['power_w'])
                         else:
                             r_stats["offline"] += 1
                         if res['last_updated'] > r_stats["last_updated"]:
@@ -383,11 +571,13 @@ async def process_rack_data(session, wh_name, rack_name, rack_config, semaphore)
             # Actualizar cache del rack
             cache_data["wh_miners"][rack_key] = rack_miners
             avg_temp = round(sum(r_stats["temps"])/len(r_stats["temps"]), 1) if r_stats["temps"] else 0
+            p95_temp = calculate_percentile(r_stats["temps"], 95)
+            p95_power = calculate_percentile(r_stats["powers"], 95)
             
             cache_data["racks"][rack_key].update({
                 "online_miners": r_stats["online"], "offline_miners": r_stats["offline"],
                 "total_hashrate_th": round(r_stats["hashrate"], 2), "total_power_w": r_stats["power"],
-                "avg_temp": avg_temp, "last_updated": r_stats["last_updated"] or time.time()
+                "avg_temp": avg_temp, "p95_temp": p95_temp, "p95_power": p95_power, "last_updated": r_stats["last_updated"] or time.time()
             })
             return wh_name, r_stats
         finally:
@@ -426,10 +616,11 @@ async def update_warehouses():
 
             for wh_name, acc in wh_accumulator.items():
                 avg_temp = round(sum(acc["temps"])/len(acc["temps"]), 1) if acc["temps"] else 0
+                p95_temp = calculate_percentile(acc["temps"], 95)
                 cache_data["warehouses"][wh_name].update({
                     "total_miners": acc["miners"], "online_miners": acc["on"],
                     "total_hashrate_th": round(acc["hash"], 2),
-                    "total_power_w": acc["pwr"], "avg_temp": avg_temp,
+                    "total_power_w": acc["pwr"], "avg_temp": avg_temp, "p95_temp": p95_temp,
                     "online_racks": acc["racks_on"], "last_updated": time.time()
                 })
             
@@ -453,12 +644,27 @@ async def prune_circuit_breaker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # --- FIX: Supresión de errores de desconexión en Windows (WinError 10054) ---
+    loop = asyncio.get_running_loop()
+    original_handler = loop.get_exception_handler()
+    def custom_handler(loop, context):
+        exc = context.get("exception")
+        if isinstance(exc, ConnectionResetError) or (exc and "WinError 10054" in str(exc)):
+            return # Ignorar errores de desconexión forzada (ruido en logs)
+        if original_handler:
+            original_handler(loop, context)
+        else:
+            loop.default_exception_handler(context)
+    loop.set_exception_handler(custom_handler)
+
     init_cache()
     c_task = asyncio.create_task(update_containers())
     w_task = asyncio.create_task(update_warehouses())
     gc_task = asyncio.create_task(prune_circuit_breaker())
     yield
+    # AL CERRAR LA APP:
     c_task.cancel(); w_task.cancel(); gc_task.cancel()
+    THREAD_POOL.shutdown(wait=False) # <--- Apagamos los hilos
     try: await asyncio.gather(c_task, w_task, gc_task, return_exceptions=True)
     except asyncio.CancelledError: pass
 
@@ -511,12 +717,19 @@ async def get_air():
                     "rack": r_conf["rack_number"],
                     "ip": m.get('ip'), 
                     "online": m.get('online'),
+                    "status": m.get('status', 'offline'),  # mining/idle/offline
+                    "status_reason": m.get('status_reason', 'unknown'),
                     "hashrate": m.get('hashrate_th', 0), 
                     "temp_chip": m.get('temp_chip', 0),
-                    "temp_ambient": m.get('temp_ambient', 0), # <--- .get(key, default)
+                    "temp_ambient": m.get('temp_ambient', 0),
                     "updated": m.get('updated', 0)
                 })
     return data
+
+@app.get("/api/racks")
+async def get_racks():
+    """Endpoint de estadísticas detalladas por rack, incluyendo P95 temp y power."""
+    return list(cache_data["racks"].values())
 
 @app.get("/api/stats")
 async def get_stats():
