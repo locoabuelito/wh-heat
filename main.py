@@ -5,6 +5,7 @@ import time     # Para medir tiempos, calcular latencias y obtener timestamps.
 import logging  # Para generar registros (logs) ordenados en la consola.
 import re       # Expresiones regulares, usadas para limpiar respuestas JSON sucias.
 import os       # Para verificar si existe el archivo config.json.
+import socket   # Para TCP ping rápido
 from contextlib import asynccontextmanager # Para gestionar el ciclo de vida de la App.
 from typing import Dict, List, Any, Optional # Tipos de datos para mejorar la legibilidad.
 from collections import OrderedDict # Diccionario que recuerda el orden (para caché LRU).
@@ -38,13 +39,17 @@ def load_config():
         "warehouses": {}
     }
     try:
-        if os.path.exists("config.json"):
-            with open("config.json", "r") as f:
+        config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
                 user_config = json.load(f)
                 defaults.update(user_config)
-                logger.info("✅ Configuración cargada desde config.json")
+                # Log de debug para verificar credenciales (parcialmente ocultas)
+                auth = defaults.get("miner_auth", {})
+                logger.info(f"✅ Configuración cargada desde {config_path}")
+                logger.info(f"🔑 Auth User: {auth.get('username')} | Pass: {'*' * len(auth.get('password', ''))}")
         else:
-            logger.warning("⚠️ config.json no encontrado. Usando defaults.")
+            logger.warning(f"⚠️ config.json no encontrado en {config_path}. Usando defaults.")
     except Exception as e:
         logger.error(f"❌ Error cargando config: {e}")
     return defaults
@@ -67,6 +72,8 @@ MAX_HTTP_CONNECTIONS = CONFIG["concurrency"]["max_connections"]
 BATCH_SIZE = CONFIG.get("batch_processing", {}).get("batch_size", 60)
 BATCH_DELAY_MS = CONFIG.get("batch_processing", {}).get("delay_ms", 50)
 CB_CONFIG = CONFIG["circuit_breaker"]
+AUTH_USER = CONFIG.get("miner_auth", {}).get("username", "root")
+AUTH_PASS = CONFIG.get("miner_auth", {}).get("password", "root")
 IP_TEMPLATE = "10.140.{}.251"
 
 # --- 3. CONSTRUCCIÓN DEL MAPA DE WAREHOUSES ---
@@ -76,16 +83,17 @@ if "warehouses" in CONFIG and CONFIG["warehouses"]:
     for wh_name, wh_conf in CONFIG["warehouses"].items():
         try:
             wh_type = wh_conf.get("type", "antminer")
-            racks_count = wh_conf.get("racks_count", 16)
+            racks_count = int(wh_conf.get("racks_count", 16))
             ip_pattern = wh_conf.get("base_ip_pattern", "10.142.{}.1")
-            offset = wh_conf.get("offset_start", 0)
+            offset = int(wh_conf.get("offset_start", 0))
+            miner_range = int(wh_conf.get("miner_range", 180))
             
             racks_dict = {}
             for i in range(racks_count):
                 subnet_num = offset + i
                 base_ip = ip_pattern.format(subnet_num)
                 racks_dict[f"Rack{i+1}"] = {
-                    "base_ip": base_ip, "range": 180, 
+                    "base_ip": base_ip, "range": miner_range, 
                     "type": wh_type, "rack_number": i + 1
                 }
             
@@ -188,39 +196,21 @@ def extract_safe_json(text: str) -> Optional[Dict]:
     except Exception:
         return None
 
-def ping_host(ip: str, timeout_ms: int = 100) -> bool:
+def tcp_ping(ip: str, port: int = 80, timeout: float = 0.15) -> bool:
     """
-    Ejecuta ping ICMP para verificar conectividad básica.
-    Mucho más rápido y eficiente que HTTP request.
-    
-    Args:
-        ip: IP del host a verificar
-        timeout_ms: Timeout en milisegundos (default 100ms)
-    
-    Returns:
-        True si el host responde a ping, False en caso contrario
+    Verifica conectividad usando un socket TCP.
+    Extremadamente rápido (sin overhead de procesos).
     """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
     try:
-        import subprocess
-        import platform
-        
-        # Windows usa -n, Linux/Mac usan -c
-        param = '-n' if platform.system().lower() == 'windows' else '-c'
-        # Windows usa -w (ms), Linux/Mac usan -W (segundos)
-        timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
-        timeout_value = str(timeout_ms) if platform.system().lower() == 'windows' else str(max(1, timeout_ms // 1000))
-        
-        # Ejecutar ping: 1 paquete, timeout configurado
-        result = subprocess.run(
-            ['ping', param, '1', timeout_param, timeout_value, ip],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=1  # Timeout del proceso subprocess
-        )
-        
-        return result.returncode == 0
+        s.connect((ip, port))
+        s.shutdown(socket.SHUT_RDWR)
+        return True
     except Exception:
         return False
+    finally:
+        s.close()
 # --- 6. CIRCUIT BREAKER ---
 def enforce_cb_limit():
     if len(circuit_breaker_store) > CB_CONFIG["max_store_size"]:
@@ -314,19 +304,19 @@ async def fetch_avalon_miner(session: aiohttp.ClientSession, ip: str, wh_name: s
         'model': 'Avalon', 'updated': time.time(), 'last_updated': time.time()
     }
     
-    # MEJORA 1: Pre-check con ICMP ping (200ms para mejor precisión)
+    # MEJORA 1: Pre-check con TCP ping (rápido y ligero)
     loop = asyncio.get_running_loop()
-    is_pingable = await loop.run_in_executor(None, ping_host, ip, 200)
+    is_pingable = await loop.run_in_executor(None, tcp_ping, ip, 80, 0.2)
     
     if not is_pingable:
-        result['status_reason'] = 'no_ping_response'
+        result['status_reason'] = 'no_tcp_response'
         record_failure(ip)
         update_metrics(time.time() - start, False)
         return result
     
     # Si responde ping, intentar HTTP
     try:
-        auth = aiohttp.BasicAuth('root', 'root')
+        auth = aiohttp.BasicAuth(AUTH_USER, AUTH_PASS)
         async with session.get(f"http://{ip}/get_home.cgi", auth=auth, timeout=3.5) as r:
             if r.status == 200:
                 data = extract_safe_json(await r.text())
@@ -405,16 +395,16 @@ def _sync_fetch_s21(ip: str, wh_name: str, rack_name: str):
         'model': 'Antminer S21+', 'updated': time.time(), 'last_updated': 0
     }
     
-    # MEJORA 1: ICMP ping pre-check (200ms para mejor precisión)
-    if not ping_host(ip, 200):
-        result['status_reason'] = 'no_ping_response'
+    # MEJORA 1: TCP ping pre-check
+    if not tcp_ping(ip, 80, 0.2):
+        result['status_reason'] = 'no_tcp_response'
         return (False, result)
 
     try:
         # Timeout aumentado a 3.5s para reducir falsos negativos
         resp = sync_session.get(
             url, 
-            auth=HTTPDigestAuth('root', 'root'), 
+            auth=HTTPDigestAuth(AUTH_USER, AUTH_PASS), 
             timeout=3.5
         )
         
@@ -492,7 +482,8 @@ async def fetch_antminer_stats(session: aiohttp.ClientSession, ip: str, wh_name:
 # --- 8. ORQUESTADORES ASÍNCRONOS ---
 
 async def update_containers():
-    connector = aiohttp.TCPConnector(limit=100, force_close=True)
+    # Aumentamos el límite a 200 para que entren todos los contenedores (~110) sin hacer cola
+    connector = aiohttp.TCPConnector(limit=200, force_close=True)
     async with aiohttp.ClientSession(connector=connector) as session:
         while True:
             system_health["containers_last_beat"] = time.time()
@@ -726,6 +717,32 @@ async def get_air():
                 })
     return data
 
+@app.get("/api/warehouse/{wh_name}")
+async def get_warehouse_miners(wh_name: str):
+    """Endpoint optimizado para obtener mineros de un warehouse específico."""
+    data = []
+    if wh_name not in WAREHOUSE_CONFIG:
+        return []
+        
+    wh_conf = WAREHOUSE_CONFIG[wh_name]
+    for r_name, r_conf in wh_conf["racks"].items():
+        r_key = f"{wh_name}_{r_name}"
+        miners = cache_data["wh_miners"].get(r_key, [])
+        for m in miners:
+            data.append({
+                "wh": wh_name, 
+                "rack": r_conf["rack_number"],
+                "ip": m.get('ip'), 
+                "online": m.get('online'),
+                "status": m.get('status', 'offline'),
+                "status_reason": m.get('status_reason', 'unknown'),
+                "hashrate": m.get('hashrate_th', 0), 
+                "temp_chip": m.get('temp_chip', 0),
+                "temp_ambient": m.get('temp_ambient', 0),
+                "updated": m.get('updated', 0)
+            })
+    return data
+
 @app.get("/api/racks")
 async def get_racks():
     """Endpoint de estadísticas detalladas por rack, incluyendo P95 temp y power."""
@@ -745,6 +762,11 @@ async def get_stats():
     
     c_hash = sum(c.get('total_hashrate_ph', 0) * 1000 for c in cache_data["containers"].values() if c.get('online'))
     
+    # Calculo Consumo Contenedores
+    # Los contenedores tienen pwr_box1_kw y pwr_box2_kw (en Kilowatts)
+    # Convertimos a Watts (*1000) para sumar con wh_pwr (que está en Watts)
+    c_pwr = sum((c.get('pwr_box1_kw', 0) + c.get('pwr_box2_kw', 0)) * 1000 for c in cache_data["containers"].values() if c.get('online'))
+
     # Cálculos seguros
     c_pct = round((on_c/total_c*100) if total_c else 0, 1)
     w_pct = round((online_wh/len(WAREHOUSE_CONFIG)*100) if WAREHOUSE_CONFIG else 0, 1)
@@ -756,7 +778,9 @@ async def get_stats():
             "total_warehouses": len(WAREHOUSE_CONFIG), "online_warehouses": online_wh, "warehouses_percentage": w_pct,
             "total_miners": wh_miners, "online_miners": wh_on, "miners_percentage": m_pct,
             "total_hashrate_ph": round((wh_hash + c_hash)/1000, 2),
-            "total_power_mw": round(wh_pwr/1000000, 2),
+            "containers_power_mw": round(c_pwr/1000000, 2),
+            "warehouses_power_mw": round(wh_pwr/1000000, 2),
+            "total_power_mw": round((wh_pwr + c_pwr)/1000000, 2),
             "system_health": round((c_pct + w_pct + m_pct)/3, 1),
             "last_updated": time.time()
         }

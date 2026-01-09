@@ -7,6 +7,10 @@
         "batch_size": 45,
         "delay_ms": 500
     },
+    "miner_auth": {
+        "username": "root",
+        "password": "root"
+    },
     "circuit_breaker": {
         "max_failures": 6,
         "cooldown_seconds": 300,
@@ -17,65 +21,54 @@
         111
     ],
     "warehouses": {
-        "WH1": {
-            "type": "buzzminer",
-            "racks_count": 16,
-            "base_ip_pattern": "10.141.{}.1",
-            "offset_start": 1
-        },
         "WH2": {
             "type": "avalon",
             "racks_count": 16,
             "base_ip_pattern": "10.142.{}.1",
-            "offset_start": 17
+            "offset_start": 17,
+            "miner_range": 180
         },
         "WH3": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.143.{}.1",
-            "offset_start": 33
+            "offset_start": 33,
+            "miner_range": 180
         },
         "WH4": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.144.{}.1",
-            "offset_start": 49
+            "offset_start": 49,
+            "miner_range": 180
         },
         "WH5": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.145.{}.1",
-            "offset_start": 65
+            "offset_start": 65,
+            "miner_range": 180
         },
         "WH6": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.146.{}.1",
-            "offset_start": 81
+            "offset_start": 81,
+            "miner_range": 180
         },
         "WH7": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.147.{}.1",
-            "offset_start": 97
+            "offset_start": 97,
+            "miner_range": 180
         },
         "WH8": {
             "type": "antminer",
             "racks_count": 16,
             "base_ip_pattern": "10.148.{}.1",
-            "offset_start": 113
-        },
-        "WH9": {
-            "type": "buzzminer",
-            "racks_count": 16,
-            "base_ip_pattern": "10.149.{}.1",
-            "offset_start": 129
-        },
-        "WH10": {
-            "type": "buzzminer",
-            "racks_count": 16,
-            "base_ip_pattern": "10.150.{}.1",
-            "offset_start": 145
+            "offset_start": 113,
+            "miner_range": 180
         }
     }
 }

@@ -541,6 +541,146 @@
             padding: 10px;
         }
 
+        /* HEATMAP STYLES */
+        .hm-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            background: var(--bg-card);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .hm-select {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .hm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .hm-rack {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .hm-rack-title {
+            font-weight: 700;
+            color: #8b949e;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .hm-miners-grid {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 2px;
+        }
+
+        .hm-cell {
+            aspect-ratio: 1;
+            width: 100%;
+            height: 100%;
+            background: #30363d;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+            /* Center text for IP display */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.7);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .hm-cell:hover {
+            transform: scale(1.2);
+            z-index: 2;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Colores Heatmap */
+        .hm-c-ok {
+            background: #238636;
+        }
+
+        /* < 65 */
+        .hm-c-warn {
+            background: #d29922;
+        }
+
+        /* 65 - 75 */
+        .hm-c-crit {
+            background: #bd2c00;
+        }
+
+        /* > 75 */
+        .hm-c-off {
+            background: #30363d;
+            border: 1px solid #21262d;
+        }
+
+        .hm-c-missing {
+            background: transparent;
+            border: 1px dashed #30363d;
+            pointer-events: none;
+        }
+
+        .hm-legend {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #8b949e;
+            align-items: center;
+        }
+
+        .hm-leg-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .hm-leg-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        .hm-switch-block {
+            margin-bottom: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .hm-switch-label {
+            font-size: 10px;
+            color: #8b949e;
+            margin-bottom: 2px;
+            text-align: right;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 2px;
+        }
+
+
         .stats-card {
             background: var(--card-black);
             border: 1px solid var(--border);
@@ -669,13 +809,14 @@
 
         .racks-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 10px;
             margin-top: 12px;
+            align-content: start;
         }
 
         .rack-box {
-            aspect-ratio: 1;
+            aspect-ratio: 1 / 1;
             border-radius: 6px;
             background: #21262d;
             display: flex;
@@ -844,8 +985,10 @@
             <div class="tabs">
                 <button class="tab" :class="{active: currentTab === 'containers'}"
                     @click="currentTab = 'containers'">Contenedores</button>
-                <button class="tab" :class="{active: currentTab === 'warehouses'}"
-                    @click="currentTab = 'warehouses'">Warehouses</button>
+                <!-- <button class="tab" :class="{active: currentTab === 'warehouses'}"
+                    @click="currentTab = 'warehouses'">Warehouses</button> -->
+                <button class="tab" :class="{active: currentTab === 'heatmap'}" @click="currentTab = 'heatmap'">🔥
+                    Heatmap</button>
                 <button class="tab" :class="{active: currentTab === 'stats'}"
                     @click="currentTab = 'stats'">Estadísticas</button>
             </div>
@@ -1135,12 +1278,18 @@
                                 stats.summary?.total_hashrate_ph }}
                                 PH/s</span>
                         </div>
-                        <div class="wc-metric">
-                            <span class="wc-lbl">Consumo Total</span>
-                            <span class="wc-val" style="color:#d29922">{{
-                                stats.summary?.total_power_mw }} MW</span>
+                        <div class="stat-card">
+                            <div class="stat-title">CONSUMO TOTAL</div>
+                            <div class="stat-value" style="color: #d29922;">{{ stats.summary ?
+                                stats.summary.total_power_mw : 0 }} MW</div>
+                            <div
+                                style="font-size: 11px; color: #ffffff; font-weight: bold; margin-top: 4px; display: flex; justify-content: space-between;">
+                                <span>Cont: {{ stats.summary ? stats.summary.containers_power_mw : 0 }} MW</span>
+                                <span>Wh: {{ stats.summary ? stats.summary.warehouses_power_mw : 0 }} MW</span>
+                            </div>
                         </div>
                     </div>
+
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
                         <div>
@@ -1247,6 +1396,74 @@
             </div>
         </div>
 
+        <!-- TAB: HEATMAP -->
+        <div v-if="currentTab === 'heatmap'">
+            <div class="hm-controls">
+                <label>Seleccionar Warehouse:</label>
+                <select v-model="heatmapWh" class="hm-select" @change="loadHeatmap">
+                    <option value="" disabled>Seleccione...</option>
+                    <option v-for="wh in sortedWarehousesList" :value="wh">{{ wh }}</option>
+                </select>
+                <div v-if="loading.heatmap" style="color: #8b949e">
+                    <span class="loading">⌛</span> Cargando datos...
+                </div>
+                <div v-else-if="heatmapData.length > 0" style="color: #7ee787; font-size: 13px;">
+                    Miners: {{ heatmapData.length }} | Racks: {{ Object.keys(heatmapRacks).length }}
+                </div>
+            </div>
+
+            <div class="hm-legend">
+                <div class="hm-leg-item">
+                    <div class="hm-leg-box hm-c-ok"></div> Normal (&lt;36°C)
+                </div>
+                <div class="hm-leg-item">
+                    <div class="hm-leg-box hm-c-warn"></div> Alto (36-38°C)
+                </div>
+                <div class="hm-leg-item">
+                    <div class="hm-leg-box hm-c-crit"></div> Crítico (&gt;38°C)
+                </div>
+                <div class="hm-leg-item">
+                    <div class="hm-leg-box hm-c-off"></div> Offline (Sin Hash)
+                </div>
+                <div class="hm-leg-item">
+                    <div class="hm-leg-box hm-c-missing"></div> N/A (Sin IP)
+                </div>
+            </div>
+
+            <div v-if="heatmapWh && !loading.heatmap" class="hm-grid">
+                <div v-for="(miners, rackName) in heatmapRacks" :key="rackName" class="hm-rack">
+                    <div class="hm-rack-title">
+                        <span>RACK {{ rackName }}</span>
+                        <span>{{ miners.length }}</span>
+                    </div>
+
+                    <!-- Unified 15x12 Grid -->
+                    <div class="hm-miners-grid">
+                        <div v-for="(m, idx) in getRackGrid(miners)" :key="idx" class="hm-cell"
+                            :class="getHeatmapClass(m)" @mouseenter="showHeatmapTooltip($event, m)"
+                            @mouseleave="hideTooltip">
+                            <span v-if="m.ip">{{ m.ip.split('.')[3] }}</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: STATS (Restored Placeholder) -->
+        <div v-if="currentTab === 'stats'">
+            <!-- Stats content seems to be missing, restoring minimal check or empty -->
+            <div v-if="loading.stats" class="loading">
+                <div class="spinner"></div>
+            </div>
+            <div v-else style="padding: 20px;">
+                <h2>Estadísticas Globales</h2>
+                <p>Contenedores: {{ stats.summary?.total_containers }}</p>
+                <p>Warehouses: {{ stats.summary?.total_warehouses }}</p>
+                <!-- Add more stats restoration if needed, assuming user wants Heatmap mostly now -->
+            </div>
+        </div>
+
         <div v-if="modalOpen" class="modal-overlay" @click.self="closeModal">
             <div class="modal-panel">
                 <div class="dp-header">
@@ -1322,36 +1539,48 @@
                 style="font-weight:bold; color:#58a6ff; margin-bottom:6px; border-bottom:1px solid #30363d; padding-bottom:4px;">
                 {{ tooltip.title }}
             </div>
-            <div v-if="tooltip.status" style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span>Estado:</span>
-                <span style="font-weight:bold;" :style="{color: tooltip.statusColor}">{{ tooltip.status
-                    }}</span>
+
+            <!-- MINER VIEW -->
+            <div v-if="tooltip.isMiner">
+                <div v-if="tooltip.status" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Estado:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.statusColor}">{{ tooltip.status }}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Hashrate:</span>
+                    <span style="font-weight:bold; color: #fff;">{{ tooltip.hashrate }}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Temp:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp }}°C</span>
+                </div>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span>Salud:</span>
-                <span style="font-weight:bold;" :style="{color: tooltip.healthColor}">{{ tooltip.pct
-                    }}%</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span>Temp Avg:</span>
-                <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp
-                    }}°C</span>
-            </div>
-            <!-- P95 Restaurado -->
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span>Temp P95:</span>
-                <span style="font-weight:bold;" :style="{color: tooltip.p95Temp >= 36 ? '#d29922' : '#7ee787'}">{{
-                    tooltip.p95Temp || 0
-                    }}°C</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span>Temp Amb:</span>
-                <span style="font-weight:bold; color: #8b949e;">{{ tooltip.ambient }}°C</span>
-            </div>
-            <div
-                style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; border-top:1px solid #30363d; padding-top:4px;">
-                <span style="color:#7ee787">ON: {{ tooltip.on }}</span>
-                <span style="color:#f85149">OFF: {{ tooltip.off }}</span>
+
+            <!-- RACK VIEW (Standard) -->
+            <div v-else>
+                <div v-if="tooltip.status" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Estado:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.statusColor}">{{ tooltip.status }}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Salud:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.healthColor}">{{ tooltip.pct }}%</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Temp Avg:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.tempColor}">{{ tooltip.temp }}°C</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Temp P95:</span>
+                    <span style="font-weight:bold;" :style="{color: tooltip.p95Temp >= 36 ? '#d29922' : '#7ee787'}">
+                        {{ tooltip.p95Temp || 0 }}°C
+                    </span>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; margin-top:6px; font-size:11px; border-top:1px solid #30363d; padding-top:4px;">
+                    <span style="color:#7ee787">ON: {{ tooltip.on }}</span>
+                    <span style="color:#f85149">OFF: {{ tooltip.off }}</span>
+                </div>
             </div>
         </div>
 
@@ -1379,6 +1608,7 @@
                     loading: {
                         containers: false,
                         warehouses: false,
+                        heatmap: false,
                         stats: false,
                         health: false
                     },
@@ -1394,6 +1624,10 @@
                     showHotMinersModal: false,
                     hotMinersModal: { warehouse: '', rack: '', rackNumber: 0 },
                     airData: [], // Datos de /api/air
+
+                    // Heatmap
+                    heatmapWh: 'WH2', // Default start
+                    heatmapData: [],
 
                     // Tooltip
                     tooltip: {
@@ -1465,6 +1699,27 @@
                     return this.airData
                         .filter(m => m.wh === warehouse && m.rack === rackNumber && (m.temp_chip || 0) > 35)
                         .sort((a, b) => (b.temp_chip || 0) - (a.temp_chip || 0)); // Highest temp first
+                },
+                sortedWarehousesList() {
+                    // Generar lista fija o dinámica de WHs soportados
+                    return ['WH2', 'WH3', 'WH4', 'WH5', 'WH6', 'WH7', 'WH8'];
+                },
+                heatmapRacks() {
+                    // Agrupar heatmapData por Rack
+                    const groups = {};
+                    this.heatmapData.forEach(m => {
+                        const r = m.rack;
+                        if (!groups[r]) groups[r] = [];
+                        groups[r].push(m);
+                    });
+                    // Ordenar mineros por IP dentro de cada rack
+                    Object.keys(groups).forEach(k => {
+                        groups[k].sort((a, b) => a.ip.localeCompare(b.ip, undefined, { numeric: true }));
+                    });
+                    // Retornar objeto ordenado por claves de rack es dificil en JS obj, 
+                    // pero en v-for se suele respetar orden de inserción si fuera Map, 
+                    // aquí confiaremos en que keys numéricas se ordenan o el v-for lo maneja.
+                    return groups;
                 }
             },
             methods: {
@@ -1496,10 +1751,12 @@
                 async fetchWarehouses() {
                     this.loading.warehouses = true;
                     try {
-                        const res = await fetch('/api/air');
+                        // OPTIMIZACIÓN: Usar /api/racks para datos ligeros (solo racks)
+                        // en lugar de descargar miles de mineros con /api/air
+                        const res = await fetch('/api/racks');
                         if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         const data = await res.json();
-                        this.airData = data; // Guardar para el modal
+                        // this.airData = data; // YA NO guardamos detalle aquí para ahorrar memoria
                         this.processWarehouseData(data);
                     } catch (e) {
                         console.error("Error warehouses", e);
@@ -1521,13 +1778,14 @@
                 },
 
                 // --- PROCESAMIENTO DE DATOS WAREHOUSE (Logica migrada de JS puro) ---
-                processWarehouseData(data) {
+                // --- PROCESAMIENTO DE DATOS WAREHOUSE (OPTIMIZADO V2) ---
+                processWarehouseData(racksList) {
                     let whMap = {};
                     let gOn = 0, gOff = 0, gHash = 0;
 
-                    data.forEach(miner => {
-                        const whName = miner.wh;
-                        const rackNum = miner.rack;
+                    racksList.forEach(rack => {
+                        const whName = rack.warehouse;
+                        const rackNum = rack.rack_number;
 
                         if (!whMap[whName]) {
                             whMap[whName] = {
@@ -1535,68 +1793,51 @@
                                 racks: {},
                                 totalMiners: 0,
                                 onlineMiners: 0,
-                                miningMiners: 0,  // ← Nuevo
-                                idleMiners: 0,     // ← Nuevo
-                                offlineMiners: 0,  // ← Nuevo
+                                offlineMiners: 0,
                                 totalHashrate: 0,
                                 lastUpdated: 0,
-                                avgTemp: 0
+                                avgTemp: 0,
+                                health: 0
                             };
                         }
 
-                        // Contar por estado
-                        const status = miner.status || 'offline';
-                        if (status === 'mining') {
-                            whMap[whName].miningMiners++;
-                            whMap[whName].onlineMiners++;
-                            gOn++;
-                            gHash += miner.hashrate;
-                        } else if (status === 'idle') {
-                            whMap[whName].idleMiners++;
-                            whMap[whName].onlineMiners++;
-                            gOn++;
-                        } else {
-                            whMap[whName].offlineMiners++;
-                            gOff++;
-                        }
+                        const wh = whMap[whName];
 
-                        // Rack initialization
-                        if (!whMap[whName].racks[rackNum]) {
-                            whMap[whName].racks[rackNum] = {
-                                online: 0, total: 0, tempChip: [], lastUpdated: 0, tempAmbient: [], lastUpdated: 0
-                            };
-                        }
+                        // Mapear datos del Rack
+                        wh.racks[rackNum] = {
+                            total: rack.total_miners,
+                            online: rack.online_miners,
+                            avgTemp: rack.avg_temp,
+                            pAlertTemp: rack.p95_temp, // Backend ya calcula P95
+                            lastUpdated: rack.last_updated,
+                            tempChip: [] // Ya no necesario para display, pero mantenemos estructura
+                        };
 
-                        // Update Rack
-                        const rack = whMap[whName].racks[rackNum];
-                        rack.total++;
-                        if (miner.online || status !== 'offline') {
-                            rack.online++;
-                            whMap[whName].totalHashrate += miner.hashrate;
-                            if (miner.temp_chip !== undefined) {
-                                rack.tempChip.push(miner.temp_chip);
-                            }
-                            if (miner.temp_ambient !== undefined && miner.temp_ambient !== null) {
-                                rack.tempAmbient.push(miner.temp_ambient);
-                            }
-                        }
-                        if (miner.updated > rack.lastUpdated) rack.lastUpdated = miner.updated;
-                        if (miner.updated > whMap[whName].lastUpdated) whMap[whName].lastUpdated = miner.updated;
-                        whMap[whName].totalMiners++;
+                        // Agregados Warehouse
+                        wh.totalMiners += rack.total_miners;
+                        wh.onlineMiners += rack.online_miners;
+                        wh.offlineMiners += rack.offline_miners;
+                        wh.totalHashrate += rack.total_hashrate_th;
+
+                        if (rack.last_updated > wh.lastUpdated) wh.lastUpdated = rack.last_updated;
+
+                        // Agregados Globales
+                        gOn += rack.online_miners;
+                        gOff += rack.offline_miners;
+                        gHash += rack.total_hashrate_th;
                     });
 
-                    // Calcular Avg Temp Warehouse y P95 por Rack
+                    // Calcular promedios de WH
                     Object.values(whMap).forEach(wh => {
-                        let temps = [];
+                        let sumTemp = 0;
+                        let count = 0;
                         Object.values(wh.racks).forEach(r => {
-                            temps.push(...r.tempChip);
-                            // Calcular P95 para Alertas (Ignora el 5% superior, aprox 9 mineros de 180)
-                            // Protege contra "glitches" de sensores pero alerta si hay un grupo real caliente
-                            r.pAlertTemp = r.tempChip.length > 0 ? this.calculatePercentile(r.tempChip, 95) : 0;
-                            // Calcular Avg para display
-                            r.avgTemp = r.tempChip.length > 0 ? Number((r.tempChip.reduce((a, b) => a + b, 0) / r.tempChip.length).toFixed(1)) : 0;
+                            if (r.avgTemp > 0) {
+                                sumTemp += r.avgTemp;
+                                count++;
+                            }
                         });
-                        wh.avgTemp = temps.length ? Number((temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)) : 0;
+                        wh.avgTemp = count > 0 ? Number((sumTemp / count).toFixed(1)) : 0;
                         wh.health = wh.totalMiners > 0 ? Math.round((wh.onlineMiners / wh.totalMiners) * 100) : 0;
                     });
 
@@ -1675,6 +1916,78 @@
                     }
                 },
 
+                // --- HEATMAP LOGIC ---
+                async loadHeatmap(silent = false) {
+                    if (!this.heatmapWh) return;
+                    if (!silent) this.loading.heatmap = true;
+                    try {
+                        const res = await fetch(`/api/warehouse/${this.heatmapWh}`);
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        this.heatmapData = await res.json();
+                    } catch (e) {
+                        console.error("Error loading heatmap", e);
+                    } finally {
+                        this.loading.heatmap = false;
+                    }
+                },
+                getHeatmapClass(m) {
+                    if (m.status === 'missing') return 'hm-c-missing';
+                    if (!m.online) return 'hm-c-off';
+                    const t = m.temp_chip || 0;
+                    if (t >= 38) return 'hm-c-crit';
+                    if (t >= 36) return 'hm-c-warn';
+                    return 'hm-c-ok';
+                },
+                showHeatmapTooltip(e, m) {
+                    if (m.status === 'missing') return;
+                    const rect = e.target.getBoundingClientRect();
+                    const t = m.temp_chip || 0;
+
+                    this.tooltip = {
+                        visible: true,
+                        isMiner: true, // Flag for Smart Tooltip
+                        top: rect.top - 100, // Higher offset for larger tooltip
+                        left: rect.left - 40,
+                        title: `${m.ip}`,
+                        status: m.status || 'unknown',
+                        statusColor: m.online ? '#7ee787' : '#f85149',
+                        temp: t,
+                        tempColor: t >= 38 ? '#f85149' : (t >= 36 ? '#d29922' : '#7ee787'),
+                        ambient: m.temp_ambient || 0,
+                        hashrate: `${(m.hashrate || 0).toFixed(0)} TH/s`
+                    };
+                },
+
+                // Hack to reuse tooltip structure or render specifically
+                // For improved UX we might normally create a specific tooltip, 
+                // but reusing existing one with custom Title = IP
+                getRackGrid(miners) {
+                    // 1. Create flat array of 180 slots (ordered 1 to 180)
+                    const slots = Array(180).fill().map(() => ({ status: 'missing', ip: '' }));
+
+                    miners.forEach(m => {
+                        if (!m.ip) return;
+                        const parts = m.ip.split('.');
+                        const last = parseInt(parts[3], 10);
+                        if (last >= 1 && last <= 180) {
+                            slots[last - 1] = m;
+                        }
+                    });
+
+                    // 2. Chunk into rows of 15 AND Reverse order of rows
+                    // This puts high IPs at top (first in visual grid) and low IPs at bottom
+                    const rows = [];
+                    for (let i = 0; i < 180; i += 15) {
+                        rows.push(slots.slice(i, i + 15));
+                    }
+
+                    rows.reverse(); // [Row12, Row11, ... Row1]
+
+                    // 3. Flatten back to single array for Grid rendering
+                    return rows.flat();
+                },
+
+
                 // --- HELPERS VISUALES WAREHOUSES ---
                 isWhLive(ts) { return (Math.floor(Date.now() / 1000) - ts) < 60; },
                 getHealthColor(pct) { return pct > 95 ? '#3fb950' : (pct > 80 ? '#d29922' : '#f85149'); },
@@ -1721,13 +2034,13 @@
                     this.selectedWarehouse = whName;
 
                     try {
-                        // Fetch fresh data
-                        const res = await fetch('/api/air');
+                        // Fetch refined data per warehouse (OPTIMIZED)
+                        const res = await fetch(`/api/warehouse/${whName}`);
                         if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         const data = await res.json();
 
-                        // Filter miners for this warehouse
-                        const whMiners = data.filter(m => m.wh === whName);
+                        // No need to filter by warehouse, backend did it
+                        const whMiners = data;
 
                         // Filter by status (mining/idle/offline)
                         let filtered = whMiners.filter(m => (m.status || 'offline') === type);
@@ -1778,13 +2091,21 @@
                 },
 
                 // --- HIGH TEMPERATURE MODAL ---
-                openHotMinersModal(whName, rackNumber) {
+                async openHotMinersModal(whName, rackNumber) {
                     this.hotMinersModal = {
                         warehouse: whName,
                         rack: `Rack${rackNumber}`,
                         rackNumber: rackNumber
                     };
                     this.showHotMinersModal = true;
+
+                    // Fetch on demand si no hay datos
+                    if (!this.airData || this.airData.length === 0) {
+                        try {
+                            const res = await fetch('/api/air');
+                            this.airData = await res.json();
+                        } catch (e) { console.error("Error fetching detailed air data", e); }
+                    }
                 },
                 closeHotMinersModal() {
                     this.showHotMinersModal = false;
@@ -1876,6 +2197,9 @@
                         this.fetchStats();
                         this.fetchHealth();
                     }
+                    if (newTab === 'heatmap') {
+                        this.loadHeatmap();
+                    }
                 }
             },
             mounted() {
@@ -1895,7 +2219,12 @@
 
                 setInterval(() => {
                     if (this.currentTab === 'warehouses') this.fetchWarehouses();
-                }, 10000); // ← 30s → 10s para mejor responsividad
+                }, 10000); // 10s para Warehouses
+
+                // ← MEJORA #5: Auto-refresco de Heatmap (cada 1 min)
+                setInterval(() => {
+                    if (this.currentTab === 'heatmap') this.loadHeatmap(true); // Silent update
+                }, 60000);
             }
         }).mount('#app');
     </script>
